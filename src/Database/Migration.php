@@ -8,27 +8,32 @@ class Migration
 {
     /**
      * @var string 迁移文件存储目录
+     * Migration file storage directory
      */
     protected string $migrationsPath;
     
     /**
      * @var string 迁移记录表名
+     * Migration record table name
      */
     protected string $migrationTable;
     
     /**
      * @var DatabaseManager 数据库实例
+     * Database instance
      */
     protected DatabaseManager $db;
     
     /**
      * 构造函数
+     * Constructor
      */
     public function __construct()
     {
         $this->db = app('db');
         
         // 从配置文件读取迁移配置
+        // Read migration configuration from config file
         $migrationsConfig = config('database.migrations', [
             'table' => 'migration',
             'path' => ROOT_PATH . '/database/migrations',
@@ -36,150 +41,173 @@ class Migration
         ]);
         
         // 设置迁移表名
+        // Set migration table name
         $this->migrationTable = $migrationsConfig['table'] ?? 'migration';
         
         // 设置迁移文件路径
+        // Set migration file path
         $this->migrationsPath = $migrationsConfig['path'] ?? ROOT_PATH . '/database/migrations';
         
         // 确保迁移目录存在
+        // Ensure migration directory exists
         if (!is_dir($this->migrationsPath)) {
             mkdir($this->migrationsPath, 0755, true);
         }
         
         // 确保迁移记录表存在
+        // Ensure migration record table exists
         $this->ensureMigrationTableExists();
     }
     
     /**
      * 运行所有未执行的迁移
+     * Run all pending migrations
      * 
      * @return array 执行结果信息
+     * @return array Execution result information
      */
     public function migrate(): array
     {
         // 检查迁移功能是否启用
+        // Check if migration feature is enabled
         $migrationsConfig = config('database.migrations', []);
         if (isset($migrationsConfig['enable']) && !$migrationsConfig['enable']) {
-            return ["数据库迁移功能已被禁用"];
+            return ["Database migration feature has been disabled"];
         }
         
         $notes = [];
-        $notes[] = "开始运行数据库迁移...";
+        $notes[] = "Starting database migration...";
         
         // 获取所有迁移文件
+        // Get all migration files
         $migrationFiles = $this->getMigrationFiles();
         
         // 获取已运行的迁移
+        // Get already executed migrations
         $ranMigrations = $this->getRanMigrations();
         
         // 计算需要运行的迁移
+        // Calculate pending migrations
         $pendingMigrations = array_diff($migrationFiles, $ranMigrations);
         
         if (empty($pendingMigrations)) {
-            $notes[] = "没有需要运行的迁移";
+            $notes[] = "No pending migrations to run";
             return $notes;
         }
         
         // 按文件名排序
+        // Sort by filename
         sort($pendingMigrations);
         
         $batch = $this->getNextBatchNumber();
         
         foreach ($pendingMigrations as $migration) {
             try {
-                $notes[] = "正在运行迁移: {$migration}";
+                $notes[] = "Running migration: {$migration}";
                 
                 // 执行迁移
+                // Execute migration
                 $this->runMigration($migration, $batch);
                 
                 // 记录迁移
+                // Log migration
                 $this->logMigration($migration, $batch);
                 
-                $notes[] = "迁移完成: {$migration}";
+                $notes[] = "Migration completed: {$migration}";
                 
             } catch (Exception $e) {
-                $notes[] = "迁移失败: {$migration} - " . $e->getMessage();
+                $notes[] = "Migration failed: {$migration} - " . $e->getMessage();
                 throw $e;
             }
         }
         
-        $notes[] = "所有迁移运行完成";
+        $notes[] = "All migrations completed";
         return $notes;
     }
     
     /**
      * 回滚最后一次迁移
+     * Rollback the last migration
      * 
      * @return array 执行结果信息
+     * @return array Execution result information
      */
     public function rollback(): array
     {
         // 检查迁移功能是否启用
+        // Check if migration feature is enabled
         $migrationsConfig = config('database.migrations', []);
         if (isset($migrationsConfig['enable']) && !$migrationsConfig['enable']) {
-            return ["数据库迁移功能已被禁用"];
+            return ["Database migration feature has been disabled"];
         }
         
         $notes = [];
-        $notes[] = "开始回滚数据库迁移...";
+        $notes[] = "Starting database migration rollback...";
         
         // 获取最后一次迁移批次
+        // Get the last migration batch
         $batch = $this->getLastBatchNumber();
         
         if (!$batch) {
-            $notes[] = "没有可回滚的迁移";
+            $notes[] = "No migrations to rollback";
             return $notes;
         }
         
         // 获取该批次的所有迁移
+        // Get all migrations in this batch
         $migrations = $this->getMigrationsByBatch($batch);
         
         // 按文件名倒序回滚
+        // Rollback in reverse filename order
         rsort($migrations);
         
         foreach ($migrations as $migration) {
             try {
-                $notes[] = "正在回滚迁移: {$migration}";
+                $notes[] = "Rolling back migration: {$migration}";
                 
                 // 执行回滚
+                // Execute rollback
                 $this->rollbackMigration($migration);
                 
                 // 删除迁移记录
+                // Delete migration record
                 $this->deleteMigrationRecord($migration);
                 
-                $notes[] = "回滚完成: {$migration}";
+                $notes[] = "Rollback completed: {$migration}";
                 
             } catch (Exception $e) {
-                $notes[] = "回滚失败: {$migration} - " . $e->getMessage();
+                $notes[] = "Rollback failed: {$migration} - " . $e->getMessage();
                 throw $e;
             }
         }
         
-        $notes[] = "迁移回滚完成";
+        $notes[] = "Migration rollback completed";
         return $notes;
     }
     
     /**
      * 重置所有迁移
+     * Reset all migrations
      * 
      * @return array 执行结果信息
+     * @return array Execution result information
      */
     public function reset(): array
     {
         // 检查迁移功能是否启用
         $migrationsConfig = config('database.migrations', []);
         if (isset($migrationsConfig['enable']) && !$migrationsConfig['enable']) {
-            return ["数据库迁移功能已被禁用"];
+            return ["Database migration feature has been disabled"];
         }
         
         $notes = [];
-        $notes[] = "开始重置数据库迁移...";
+        $notes[] = "Starting database migration reset...";
         
         // 获取所有已运行的迁移（按批次倒序）
         $migrations = $this->getAllRanMigrations();
         
         if (empty($migrations)) {
-            $notes[] = "没有可重置的迁移";
+            $notes[] = "No migrations to reset";
             return $notes;
         }
         
@@ -199,7 +227,7 @@ class Migration
             
             foreach ($batchMigrations as $migration) {
                 try {
-                    $notes[] = "正在回滚迁移: {$migration->migration}";
+                    $notes[] = "Rolling back migration: {$migration->migration}";
                     
                     // 执行回滚
                     $this->rollbackMigration($migration->migration);
@@ -207,21 +235,22 @@ class Migration
                     // 删除迁移记录
                     $this->deleteMigrationRecord($migration->migration);
                     
-                    $notes[] = "回滚完成: {$migration->migration}";
+                    $notes[] = "Rollback completed: {$migration->migration}";
                     
                 } catch (Exception $e) {
-                    $notes[] = "回滚失败: {$migration->migration} - " . $e->getMessage();
+                    $notes[] = "Rollback failed: {$migration->migration} - " . $e->getMessage();
                     throw $e;
                 }
             }
         }
         
-        $notes[] = "数据库迁移重置完成";
+        $notes[] = "Database migration reset completed";
         return $notes;
     }
     
     /**
      * 刷新数据库（重置并重新运行所有迁移）
+     * Refresh database (reset and re-run all migrations)
      * 
      * @return array 执行结果信息
      */
@@ -230,7 +259,7 @@ class Migration
         // 检查迁移功能是否启用
         $migrationsConfig = config('database.migrations', []);
         if (isset($migrationsConfig['enable']) && !$migrationsConfig['enable']) {
-            return ["数据库迁移功能已被禁用"];
+            return ["Database migration feature has been disabled"];
         }
         
         $notes = [];
@@ -248,6 +277,7 @@ class Migration
     
     /**
      * 显示迁移状态
+     * Show migration status
      * 
      * @return array 迁移状态信息
      */
@@ -303,7 +333,7 @@ class Migration
         // 检查迁移功能是否启用
         $migrationsConfig = config('database.migrations', []);
         if (isset($migrationsConfig['enable']) && !$migrationsConfig['enable']) {
-            throw new Exception("数据库迁移功能已被禁用");
+            throw new Exception("Database migration feature has been disabled");
         }
         
         // 生成时间戳
@@ -321,7 +351,7 @@ class Migration
         
         // 写入文件
         if (file_put_contents($filepath, $content) === false) {
-            throw new Exception("无法创建迁移文件: {$filepath}");
+            throw new Exception("Failed to create migration file: {$filepath}");
         }
         
         return $filepath;
@@ -329,6 +359,7 @@ class Migration
     
     /**
      * 确保迁移记录表存在
+     * Ensure migration table exists
      */
     protected function ensureMigrationTableExists(): void
     {
@@ -346,6 +377,7 @@ class Migration
     
     /**
      * 获取所有迁移文件
+     * Get all migration files
      * 
      * @return array 迁移文件名数组
      */
@@ -368,6 +400,7 @@ class Migration
     
     /**
      * 获取已运行的迁移文件名
+     * Get all ran migrations
      * 
      * @return array 已运行的迁移文件名数组
      */
@@ -380,6 +413,7 @@ class Migration
     
     /**
      * 获取所有已运行的迁移记录
+     * Get all ran migrations
      * 
      * @return array 迁移记录数组
      */
@@ -390,6 +424,7 @@ class Migration
     
     /**
      * 获取下一个批次号
+     * Get next batch number
      * 
      * @return int 批次号
      */
@@ -402,6 +437,7 @@ class Migration
     
     /**
      * 获取最后一个批次号
+     * Get last batch number
      * 
      * @return int|null 批次号或null
      */
@@ -414,6 +450,7 @@ class Migration
     
     /**
      * 获取指定批次的所有迁移
+     * Get all migrations in a batch
      * 
      * @param int $batch 批次号
      * @return array 迁移文件名数组
@@ -427,6 +464,7 @@ class Migration
     
     /**
      * 运行单个迁移
+     * Run single migration
      * 
      * @param string $migration 迁移文件名
      * @param int $batch 批次号
@@ -456,6 +494,7 @@ class Migration
     
     /**
      * 回滚单个迁移
+     * Rollback single migration
      * 
      * @param string $migration 迁移文件名
      */
@@ -464,7 +503,7 @@ class Migration
         $filepath = $this->migrationsPath . '/' . $migration . '.php';
         
         if (!file_exists($filepath)) {
-            throw new Exception("迁移文件不存在: {$filepath}");
+            throw new Exception("Migration file does not exist: {$filepath}");
         }
         
         require_once $filepath;
@@ -472,7 +511,7 @@ class Migration
         $className = $this->getMigrationClassName($migration);
         
         if (!class_exists($className)) {
-            throw new Exception("迁移类不存在: {$className}");
+            throw new Exception("Migration class does not exist: {$className}");
         }
         
         $migrationInstance = new $className();
@@ -484,6 +523,7 @@ class Migration
     
     /**
      * 记录迁移
+     * Record migration
      * 
      * @param string $migration 迁移文件名
      * @param int $batch 批次号
@@ -495,6 +535,7 @@ class Migration
     
     /**
      * 删除迁移记录
+     * Delete migration record
      * 
      * @param string $migration 迁移文件名
      */
@@ -505,6 +546,7 @@ class Migration
     
     /**
      * 格式化迁移名称
+     * Format migration name
      * 
      * @param string $name 原始名称
      * @return string 格式化后的名称
@@ -544,6 +586,7 @@ class {$className}
 {
     /**
      * 运行迁移
+     * Run migration
      */
     public function up()
     {
@@ -554,6 +597,7 @@ class {$className}
 
     /**
      * 回滚迁移
+     * Rollback migration
      */
     public function down()
     {
@@ -566,6 +610,7 @@ class {$className}
     
     /**
      * 获取迁移类名
+     * Get migration class name
      * 
      * @param string $migration 迁移文件名
      * @return string 类名

@@ -18,7 +18,7 @@ class ConfigManager
             return $this->cache[$key];
         }
 
-        $value = $this->getNestedValue($this->config, $key, $default);
+        $value = $this->getValue($this->config, $key, $default);
         $this->cache[$key] = $value;
         return $value;
     }
@@ -26,12 +26,12 @@ class ConfigManager
     public function set(string $key, $value): void
     {
         $this->clearCache($key);
-        $this->setNestedValue($this->config, $key, $value);
+        $this->setValue($this->config, $key, $value);
     }
 
     public function has(string $key): bool
     {
-        return $this->getNestedValue($this->config, $key, '__NOT_EXISTS__') !== '__NOT_EXISTS__';
+        return $this->getValue($this->config, $key, '__NOT_EXISTS__') !== '__NOT_EXISTS__';
     }
 
     public function all(): array
@@ -45,7 +45,7 @@ class ConfigManager
         $this->config = array_merge_recursive($this->config, $config);
     }
 
-    protected function getNestedValue(array $array, string $key, $default = null)
+    protected function getValue(array $array, string $key, $default = null)
     {
         $keys = explode('.', $key);
         $value = $array;
@@ -60,7 +60,7 @@ class ConfigManager
         return $value;
     }
 
-    protected function setNestedValue(array &$array, string $key, $value): void
+    protected function setValue(array &$array, string $key, $value): void
     {
         $keys = explode('.', $key);
         $current = &$array;

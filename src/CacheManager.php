@@ -8,14 +8,17 @@ use Closure;
 
 /**
  * 缓存管理器
+ * Cache Manager
  *
  * 提供统一的缓存操作接口，支持多种缓存驱动
+ * Provides unified cache operation interface, supports multiple cache drivers
  * 包含缓存统计、批量操作、模式删除等高级功能
+ * Includes advanced features like cache statistics, batch operations, pattern deletion
  */
 class CacheManager
 {
     /**
-     * @var CacheRepository 缓存实例
+     * @var CacheRepository 缓存实例 Cache instance
      */
     protected $cache;
 
@@ -23,8 +26,9 @@ class CacheManager
 
     /**
      * 构造函数
+     * Constructor
      *
-     * @param CacheRepository $cache 缓存实例
+     * @param CacheRepository $cache 缓存实例 Cache instance
      */
     public function __construct(CacheRepository $cache)
     {
@@ -34,6 +38,7 @@ class CacheManager
 
     /**
      * 获取真实的缓存key
+     * Get real cache key
      *
      * @param string $key
      * @return string
@@ -49,9 +54,10 @@ class CacheManager
     }
     /**
      * 获取缓存值
+     * Get cache value
      *
-     * @param string $key 缓存键
-     * @param mixed $default 默认值
+     * @param string $key 缓存键 Cache key
+     * @param mixed $default 默认值 Default value
      * @return mixed
      */
     public function get(string $key, $default = null): mixed
@@ -63,10 +69,11 @@ class CacheManager
 
     /**
      * 设置缓存值
+     * Set cache value
      *
-     * @param string $key 缓存键
-     * @param mixed $value 缓存值
-     * @param mixed $ttl 过期时间
+     * @param string $key 缓存键 Cache key
+     * @param mixed $value 缓存值 Cache value
+     * @param mixed $ttl 过期时间 Time to live
      * @return bool
      */
     public function set(string $key, $value, $ttl = null): bool
@@ -77,8 +84,9 @@ class CacheManager
 
     /**
      * 删除缓存
+     * Delete cache
      *
-     * @param string $key 缓存键
+     * @param string $key 缓存键 Cache key
      * @return bool
      */
     public function delete(string $key): bool
@@ -89,8 +97,9 @@ class CacheManager
 
     /**
      * 检查缓存是否存在
+     * Check if cache exists
      *
-     * @param string $key 缓存键
+     * @param string $key 缓存键 Cache key
      * @return bool
      */
     public function has(string $key): bool
@@ -100,10 +109,11 @@ class CacheManager
 
     /**
      * 记住缓存值（如果不存在则设置）
+     * Remember cache value (set if not exists)
      *
-     * @param string $key 缓存键
-     * @param mixed $ttl 过期时间
-     * @param Closure $callback 回调函数
+     * @param string $key 缓存键 Cache key
+     * @param mixed $ttl 过期时间 Time to live
+     * @param Closure $callback 回调函数 Callback function
      * @return mixed
      */
     public function remember(string $key, $ttl, Closure $callback)
@@ -113,9 +123,10 @@ class CacheManager
 
     /**
      * 递增缓存值
+     * Increment cache value
      *
-     * @param string $key 缓存键
-     * @param int $value 递增步长
+     * @param string $key 缓存键 Cache key
+     * @param int $value 递增步长 Increment step
      * @return int
      */
     public function increment(string $key, int $value = 1)
@@ -125,9 +136,10 @@ class CacheManager
 
     /**
      * 递减缓存值
+     * Decrement cache value
      *
-     * @param string $key 缓存键
-     * @param int $value 递减步长
+     * @param string $key 缓存键 Cache key
+     * @param int $value 递减步长 Decrement step
      * @return int
      */
     public function decrement(string $key, int $value = 1)
@@ -137,6 +149,7 @@ class CacheManager
 
     /**
      * 清除所有缓存
+     * Clear all cache
      *
      * @return bool
      */
@@ -148,9 +161,10 @@ class CacheManager
 
     /**
      * 按模式删除缓存（仅支持Redis驱动）
+     * Delete cache by pattern (Redis driver only)
      *
-     * @param string $pattern 模式匹配
-     * @return int 删除的键数量
+     * @param string $pattern 模式匹配 Pattern match
+     * @return int
      */
     public function deleteByPattern(string $pattern): int
     {
@@ -195,6 +209,7 @@ class CacheManager
 
     /**
      * 获取缓存实例
+     * Get cache instance
      *
      * @return CacheRepository
      */
@@ -205,8 +220,9 @@ class CacheManager
 
     /**
      * 检查缓存驱动是否支持某个功能
+     * Check if cache driver supports a feature
      *
-     * @param string $feature 功能名称
+     * @param string $feature 功能名称 Feature name
      * @return bool
      */
     public function supports(string $feature): bool
@@ -223,13 +239,13 @@ class CacheManager
 
     /**
      * 拉取缓存值（获取后删除）
+     * Pull cache value (get and delete)
      *
-     * @param string $key 缓存键
-     * @param mixed $default 默认值
+     * @param string $key 缓存键 Cache key
+     * @param mixed $default 默认值 Default value
      * @return mixed
      */
-    public function pull(string $key, $default = null)
-    {
+    public function pull(string $key, $default = null): mixed   {
         $key = $this->getKey($key);
         $value = $this->get($key, $default);
         if ($value !== $default) {
@@ -240,8 +256,9 @@ class CacheManager
 
     /**
      * 删除缓存（别名）
+     * Delete cache (alias)
      *
-     * @param string $key 缓存键
+     * @param string $key 缓存键 Cache key
      * @return bool
      */
     public function forget(string $key): bool
@@ -251,6 +268,7 @@ class CacheManager
 
     /**
      * 清除所有缓存（别名）
+     * Clear all cache (alias)
      *
      * @return bool
      */
@@ -261,8 +279,9 @@ class CacheManager
 
     /**
      * 删除多个缓存
+     * Delete multiple cache entries
      *
-     * @param iterable $keys 缓存键数组
+     * @param iterable $keys 缓存键数组 Cache keys array
      * @return bool
      */
     public function deleteMultiple(iterable $keys): bool
@@ -278,9 +297,10 @@ class CacheManager
 
     /**
      * 永久记住缓存值
+     * Remember cache value forever
      *
-     * @param string $key 缓存键
-     * @param Closure $callback 回调函数
+     * @param string $key 缓存键 Cache key
+     * @param Closure $callback 回调函数 Callback function
      * @return mixed
      */
     public function rememberForever(string $key, Closure $callback)

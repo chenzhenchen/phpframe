@@ -4,14 +4,18 @@ namespace PHPFrame;
 
 /**
  * 请求隔离管理器
+ * Request Isolation Manager
  * 
  * 统一管理常驻内存模式下的请求级状态隔离
+ * Unified management of request-level state isolation in persistent memory mode
  * 确保每个请求都有独立的状态，避免状态污染
+ * Ensures each request has independent state to avoid state pollution
  */
 class RequestIsolationManager
 {
     /**
      * 需要隔离的服务列表
+     * List of services that need isolation
      *
      * @var array
      */
@@ -30,6 +34,7 @@ class RequestIsolationManager
 
     /**
      * 是否已初始化
+     * Whether initialized
      *
      * @var bool
      */
@@ -37,11 +42,12 @@ class RequestIsolationManager
 
     /**
      * 注册需要隔离的服务
+     * Register service that needs isolation
      *
-     * @param string $serviceId 服务ID
-     * @param string $class 服务类名
-     * @param array $methods 隔离方法列表
-     * @param string $description 服务描述
+     * @param string $serviceId 服务ID Service ID
+     * @param string $class 服务类名 Service class name
+     * @param array $methods 隔离方法列表 Isolation method list
+     * @param string $description 服务描述 Service description
      * @return void
      */
     public static function registerService(
@@ -59,8 +65,9 @@ class RequestIsolationManager
 
     /**
      * 注销服务
+     * Unregister service
      *
-     * @param string $serviceId 服务ID
+     * @param string $serviceId 服务ID Service ID
      * @return void
      */
     public static function unregisterService(string $serviceId): void
@@ -70,6 +77,7 @@ class RequestIsolationManager
 
     /**
      * 获取所有已注册的服务
+     * Get all registered services
      *
      * @return array
      */
@@ -80,8 +88,9 @@ class RequestIsolationManager
 
     /**
      * 执行所有隔离操作
+     * Execute all isolation operations
      *
-     * @return array 执行结果
+     * @return array 执行结果 Execution results
      */
     public static function isolateAll(): array
     {
@@ -98,9 +107,10 @@ class RequestIsolationManager
 
     /**
      * 执行单个服务的隔离操作
+     * Execute isolation operation for a single service
      *
-     * @param string $serviceId 服务ID
-     * @param array $config 服务配置
+     * @param string $serviceId 服务ID Service ID
+     * @param array $config 服务配置 Service configuration
      * @return array
      */
     private static function isolateService(string $serviceId, array $config): array

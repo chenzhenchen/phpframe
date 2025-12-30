@@ -7,6 +7,13 @@ use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use PDO;
 
+/**
+ * 数据库管理器
+ * Database Manager
+ * 
+ * 统一管理数据库连接、查询缓存和事务
+ * Unified management of database connections, query caching, and transactions
+ */
 class DatabaseManager
 {
     protected $capsule;

@@ -4,7 +4,9 @@ namespace PHPFrame;
 
 /**
  * 门面基类
+ * Facade base class
  * 提供静态方式访问容器中的服务
+ * Provides static access to services in the container
  */
 abstract class Facade
 {
@@ -27,6 +29,7 @@ abstract class Facade
 
     /**
      * 获取门面对应的服务名称
+     * Get facade accessor service name
      */
     protected static function getFacadeAccessor()
     {
@@ -35,6 +38,7 @@ abstract class Facade
 
     /**
      * 获取容器实例
+     * Get container instance
      */
     protected static function getContainer()
     {
@@ -43,6 +47,7 @@ abstract class Facade
 
     /**
      * 解析门面对应的服务实例
+     * Resolve facade service instance
      */
     protected static function resolveFacadeInstance($name)
     {
@@ -51,6 +56,7 @@ abstract class Facade
 
     /**
      * 处理静态方法调用
+     * Handle static method calls
      */
     public static function __callStatic($method, $args)
     {

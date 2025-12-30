@@ -6,10 +6,15 @@ use PHPFrame\Container;
 use PHPFrame\RouteManager;
 use PHPFrame\Reactive\ReactiveServerManager;
 
+/**
+ * 应用类
+ * Application class
+ */
 class Application extends Container
 {
     /**
      * 应用实例
+     * Application instance
      *
      * @var Application
      */
@@ -17,6 +22,7 @@ class Application extends Container
 
     /**
      * 应用是否已经初始化
+     * Whether the application has been initialized
      *
      * @var bool
      */
@@ -24,6 +30,7 @@ class Application extends Container
 
     /**
      * 请求开始时间
+     * Request start time
      *
      * @var float
      */
@@ -31,6 +38,7 @@ class Application extends Container
 
     /**
      * 构造函数
+     * Constructor
      */
     public function __construct()
     {
@@ -41,6 +49,7 @@ class Application extends Container
 
     /**
      * 获取应用实例
+     * Get application instance
      *
      * @return self
      */
@@ -55,6 +64,7 @@ class Application extends Container
 
     /**
      * 设置应用实例
+     * Set application instance
      *
      * @param Application $instance
      * @return void
@@ -66,6 +76,7 @@ class Application extends Container
 
     /**
      * 初始化应用
+     * Initialize application
      *
      * @return void
      */
@@ -80,6 +91,7 @@ class Application extends Container
 
     /**
      * 启动应用
+     * Boot application
      *
      * @return void
      */
@@ -94,6 +106,7 @@ class Application extends Container
 
     /**
      * 运行应用
+     * Run application
      *
      * @return void
      */
@@ -120,6 +133,7 @@ class Application extends Container
 
     /**
      * 获取服务器IP地址
+     * Get server IP address
      *
      * @return string
      */
@@ -143,6 +157,7 @@ class Application extends Container
 
     /**
      * 获取客户端IP地址
+     * Get client IP address
      *
      * @return string
      */
@@ -154,6 +169,7 @@ class Application extends Container
 
     /**
      * 获取User Agent
+     * Get user agent
      *
      * @return string
      */
@@ -167,6 +183,7 @@ class Application extends Container
 
     /**
      * 准备请求数据
+     * Prepare request data
      *
      * @return array
      */
@@ -200,6 +217,7 @@ class Application extends Container
 
     /**
      * 记录请求日志
+     * Record request log
      *
      * @param int $statusCode
      * @param string $uri
@@ -230,6 +248,7 @@ class Application extends Container
 
     /**
      * 记录错误日志
+     * Record error log
      *
      * @param \Exception $e
      * @param string $uri
@@ -265,10 +284,11 @@ class Application extends Container
 
     /**
      * 记录Shell模式日志
+     * Record shell mode log
      *
      * @param int $statusCode
      * @param string $command
-     * @param array $args 命令行参数
+     * @param array $args 命令行参数 Command line arguments
      * @return void
      */
     protected function recordShellLog(int $statusCode = 0, string $command = '', array $args = []): void
@@ -300,6 +320,7 @@ class Application extends Container
 
     /**
      * 运行FPM模式
+     * Run FPM mode
      *
      * @return void
      */
@@ -373,6 +394,7 @@ class Application extends Container
 
     /**
      * 运行CLI模式
+     * Run CLI mode
      *
      * @return void
      */
@@ -387,13 +409,13 @@ class Application extends Container
         $args = array_slice($argv, 2);
 
         if (!$command) {
-            echo "用法: php cli.php [command] [args...]" . PHP_EOL;
-            echo "可用命令:" . PHP_EOL;
-            echo "  server start [--host=0.0.0.0] [--port=8000]  启动服务器" . PHP_EOL;
-            echo "  server stop     停止服务器" . PHP_EOL;
-            echo "  server reload   重载服务器配置" . PHP_EOL;
-            echo "  server restart  重启服务器" . PHP_EOL;
-            echo "  server status   查看服务器状态" . PHP_EOL;
+            echo "Usage: php cli.php [command] [args...]" . PHP_EOL;
+            echo "Available commands:" . PHP_EOL;
+            echo "  server start [--host=0.0.0.0] [--port=8000]  Start server" . PHP_EOL;
+            echo "  server stop     Stop server" . PHP_EOL;
+            echo "  server reload   Reload server config" . PHP_EOL;
+            echo "  server restart  Restart server" . PHP_EOL;
+            echo "  server status   Show server status" . PHP_EOL;
             exit(1);
         }
 
@@ -448,19 +470,19 @@ class Application extends Container
                         break;
                     case 'status':
                         $status = $serverManager->getStatus();
-                        echo "服务器状态:
+                        echo "Server status:
 ";
-                        echo "  运行状态: " . ($status['running'] ? '运行中' : '未运行') . "
+                        echo "  Running status: " . ($status['running'] ? 'Running' : 'Not running') . "
 ";
-                        echo "  监听地址: {$status['host']}:{$status['port']}
+                        echo "  Listening address: {$status['host']}:{$status['port']}
 ";
-                        echo "  Worker进程数: {$status['worker_num']}
+                        echo "  Worker process count: {$status['worker_num']}
 ";
-                        echo "  PID文件: {$status['pid_file']}
+                        echo "  PID file: {$status['pid_file']}
 ";
                         break;
                     default:
-                        echo "未知的服务器命令: {$serverAction}
+                        echo "Unknown server command: {$serverAction}
 ";
                         exit(1);
                 }
@@ -468,9 +490,9 @@ class Application extends Container
                 exit(0);
             }
 
-            echo "错误: 未知的命令 '{$command}'
+            echo "Error: Unknown command '{$command}'
 ";
-            echo "请使用 'php cli.php server start' 启动服务器，或使用 'php shell.php' 执行其他命令
+            echo "Please use 'php cli.php server start' to start the server, or use 'php shell.php' to execute other commands
 ";
             exit(1);
 
@@ -481,6 +503,7 @@ class Application extends Container
 
     /**
      * 运行Shell模式
+     * Run Shell mode
      *
      * @return void
      */
@@ -495,11 +518,11 @@ class Application extends Container
         $args = array_slice($argv, 2);
 
         if (!$command) {
-            echo "用法: php shell.php controller/action [args...]\n";
-            echo "参数格式:\n";
-            echo "  位置参数: php shell.php user/create John 25\n";
-            echo "  键值参数: php shell.php user/create name=John age=25\n";
-            echo "  混合参数: php shell.php user/create John age=25\n";
+            echo "Usage: php shell.php controller/action [args...]\n";
+            echo "Parameter format:\n";
+            echo "  Positional arguments: php shell.php user/create John 25\n";
+            echo "  Key-value arguments: php shell.php user/create name=John age=25\n";
+            echo "  Mixed arguments: php shell.php user/create John age=25\n";
             exit(1);
         }
 
@@ -517,6 +540,7 @@ class Application extends Container
 
     /**
      * 注册核心服务
+     * Register core services
      *
      * @return void
      */

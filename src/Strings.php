@@ -46,6 +46,7 @@ class Strings
 
     /**
      * authcode
+     * Authentication code encryption/decryption
      *
      * @param $string
      * @param $operation

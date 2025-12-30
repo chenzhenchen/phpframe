@@ -51,3 +51,7 @@ foreach ($requiredDirs as $dir) {
     }
 }
 
+if (!defined('APP_MODE')) {
+    // todo
+    define('APP_MODE', $_ENV['APP_MODE']??'fpm');
+}

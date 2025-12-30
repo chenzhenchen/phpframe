@@ -5,7 +5,12 @@ namespace PHPFrame;
 use React\EventLoop\Loop;
 use React\Promise\Promise as ReactPromise;
 use React\ChildProcess\Process;
-
+/**
+ * 任务类
+ * Task class
+ * 提供异步任务执行和并发控制
+ * Provides asynchronous task execution and concurrency control
+ */
 class Task
 {
     private static array $sleepingFibers = [];
@@ -265,12 +270,12 @@ class Task
             
             // 检查并发限制
             if ($concurrentCount >= $maxConcurrent) {
-                throw new \Exception("超过并发限制");
+                throw new \Exception("Over concurrent limit");
             }
 
             // 检查时间窗口限制
             if ($currentTime - $lastCallTime < $timeWindowMs) {
-                throw new \Exception("超过频率限制");
+                throw new \Exception("Over frequency limit");
             }
 
             $concurrentCount++;

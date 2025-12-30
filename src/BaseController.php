@@ -3,32 +3,40 @@
 namespace PHPFrame;
 
 use PHPFrame\Request;
-use PHPFrame\ResponseHandler;
+use PHPFrame\RequestIsolationManager;
+use PHPFrame\Response;
 use PHPFrame\Runtime;
+use React\Http\Message\Response as ReactResponse;
 
 /**
  * 基础控制器类
+ * Base controller class
  * 统一处理FPM、CLI、Shell三种模式的控制器逻辑
+ * Unified handling of controller logic for FPM, CLI, and Shell modes
  */
 abstract class BaseController
 {
     /**
      * @var Request 请求参数处理器
+     * Request parameter handler
      */
     protected $request;
     
     /**
      * @var Response 响应处理器
+     * Response handler
      */
     protected $response;
     
     /**
      * @var Runtime 运行模式检测器
+     * Runtime mode detector
      */
     protected $runtimeMode;
     
     /**
      * 构造函数
+     * Constructor
      */
     public function __construct()
     {
@@ -43,6 +51,7 @@ abstract class BaseController
     
     /**
      * 设置请求参数（用于CLI/Shell模式）
+     * Set request parameters (for CLI/Shell mode)
      */
     public function setCliParams(array $params): void
     {
@@ -51,6 +60,7 @@ abstract class BaseController
     
     /**
      * 设置请求参数（用于FPM模式）
+     * Set request parameters (for FPM mode)
      */
     public function setFpmParams(array $routeParams = []): void
     {
@@ -61,6 +71,7 @@ abstract class BaseController
     
     /**
      * 获取请求参数
+     * Get request parameter
      */
     protected function getParam(string $key, $default = null)
     {
@@ -69,6 +80,7 @@ abstract class BaseController
     
     /**
      * 获取所有请求参数
+     * Get all request parameters
      */
     protected function getParams(): array
     {
@@ -77,6 +89,7 @@ abstract class BaseController
     
     /**
      * 获取JSON请求体数据
+     * Get JSON request body data
      */
     protected function getJsonRequestBody(): array
     {
@@ -85,6 +98,7 @@ abstract class BaseController
     
     /**
      * 获取Bearer Token
+     * Get Bearer Token
      */
     protected function getBearerToken(): ?string
     {
@@ -93,6 +107,7 @@ abstract class BaseController
     
     /**
      * 检查参数是否存在
+     * Check if parameter exists
      */
     protected function hasParam(string $key): bool
     {
@@ -101,6 +116,7 @@ abstract class BaseController
     
     /**
      * 只获取指定参数
+     * Get only specified parameters
      */
     protected function onlyParams(array $keys): array
     {
@@ -109,6 +125,7 @@ abstract class BaseController
     
     /**
      * 排除指定参数
+     * Exclude specified parameters
      */
     protected function exceptParams(array $keys): array
     {
@@ -117,6 +134,7 @@ abstract class BaseController
     
     /**
      * 获取当前请求的URI
+     * Get current request URI
      */
     protected function getCurrentUri(): string
     {
@@ -125,12 +143,14 @@ abstract class BaseController
     
     /**
      * 渲染Twig模板（支持FPM和CLI模式）
+     * Render Twig template (supports FPM and CLI modes)
      */
     protected function render(string $template, array $data = [])
     {
         $twig = app('twig');
 
         // 自动添加当前URI到模板数据中
+        // Automatically add current URI to template data
         $data['current_uri'] = $this->getCurrentUri();
         return $twig->render($template, $data);
 
@@ -138,6 +158,7 @@ abstract class BaseController
     
     /**
      * 返回JSON响应
+     * Return JSON response
      */
     protected function json($data, int $statusCode = 200, string $message = "")
     {
@@ -146,6 +167,7 @@ abstract class BaseController
     
     /**
      * 返回成功响应
+     * Return success response
      */
     protected function success($data = null, string $message = 'success')
     {
@@ -154,6 +176,7 @@ abstract class BaseController
     
     /**
      * 返回错误响应
+     * Return error response
      */
     protected function error(string $message = 'error', int $code = 500)
     {
@@ -161,19 +184,29 @@ abstract class BaseController
     }
     
     /**
-     * 重定向（FPM模式）
+     * 重定向（支持FPM和CLI模式）
+     * Redirect (supports FPM and CLI modes)
      */
     protected function redirect(string $url, int $statusCode = 302)
     {
-        if (!$this->runtimeMode->isFpm()) {
-            throw new \RuntimeException('重定向仅在FPM模式下可用');
+        if ($this->runtimeMode->isFpm()) {
+            // FPM模式：使用传统的HTTP重定向
+            return $this->response->redirect($url, $statusCode);
+        } elseif ($this->runtimeMode->isCli()) {
+            // CLI模式（ReactPHP常驻内存模式）：返回ReactPHP重定向响应
+            return new ReactResponse(
+                $statusCode,
+                ['Location' => $url],
+                "Redirecting to: {$url}"
+            );
+        } else {
+            throw new \RuntimeException('Available in FPM and CLI modes');
         }
-        
-        return $this->response->redirect($url, $statusCode);
     }
     
     /**
      * 生成分页数据
+     * Generate pagination data
      */
     protected function generatePagination($paginator): array
     {
@@ -182,6 +215,7 @@ abstract class BaseController
     
     /**
      * 验证请求参数
+     * Validate request parameters
      */
     protected function validate(array $rules, array $messages = []): array
     {
@@ -236,6 +270,7 @@ abstract class BaseController
     
     /**
      * 判断当前是否为FPM模式
+     * Check if current mode is FPM
      */
     protected function isFpmMode(): bool
     {
@@ -244,6 +279,7 @@ abstract class BaseController
     
     /**
      * 判断当前是否为CLI模式
+     * Check if current mode is CLI
      */
     protected function isCliMode(): bool
     {
@@ -252,6 +288,7 @@ abstract class BaseController
     
     /**
      * 判断当前是否为Shell模式
+     * Check if current mode is Shell
      */
     protected function isShellMode(): bool
     {
@@ -260,10 +297,12 @@ abstract class BaseController
     
     /**
      * 资源清理
+     * Resource cleanup
      */
     public function __destruct()
     {
         // 强制垃圾回收（特别针对CLI模式）
+        // Force garbage collection (especially for CLI mode)
         if ($this->runtimeMode->isCli() || $this->runtimeMode->isShell()) {
             gc_collect_cycles();
         }

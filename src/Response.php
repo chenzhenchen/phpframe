@@ -5,13 +5,14 @@ namespace PHPFrame;
 use PHPFrame\Runtime;
 
 /**
- * 响应处理类
- * 统一处理FPM、CLI、Shell三种模式的响应输出
+ * Response Handler Class
+ * Unified response output handling for FPM, CLI, and Shell modes
  */
 class Response
 {
     /**
      * 创建JSON响应
+     * Create JSON response
      */
     public static function json($data, int $statusCode = 200, string $message = ""): array
     {
@@ -36,6 +37,7 @@ class Response
     
     /**
      * 创建错误响应
+     * Create error response
      */
     public static function error(string $message, int $statusCode = 500, ?array $data = null): array
     {
@@ -48,6 +50,7 @@ class Response
     
     /**
      * 创建成功响应
+     * Create success response
      */
     public static function success($data = null, string $message = '操作成功'): array
     {
@@ -60,6 +63,7 @@ class Response
     
     /**
      * 重定向（仅FPM模式）
+     * Redirect (FPM mode only)
      */
     public static function redirect(string $url, int $statusCode = 302): void
     {
@@ -74,6 +78,7 @@ class Response
     
     /**
      * 设置HTTP头
+     * Set HTTP header
      */
     public static function setHeader(string $name, string $value): void
     {
@@ -84,6 +89,7 @@ class Response
     
     /**
      * 设置HTTP状态码
+     * Set HTTP status code
      */
     public static function setStatusCode(int $code): void
     {
@@ -94,6 +100,7 @@ class Response
     
     /**
      * 生成分页数据
+     * Generate pagination data
      */
     public static function pagination($paginator): array
     {
