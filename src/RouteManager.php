@@ -50,29 +50,43 @@ class RouteManager
      * @param string $httpMethod HTTP方法
      * @param string $uri 请求URI
      * @param mixed $app 应用容器（支持DI\Container或PSR-11兼容容器）
+     * @param float $requestStartTime 请求开始时间
      * @return mixed
      */
-    public function handleFpmRequest($httpMethod, $uri, $app)
+    public function handleFpmRequest($httpMethod, $uri, $app, float $requestStartTime = null)
     {
+        if ($requestStartTime === null) {
+            $requestStartTime = microtime(true);
+        }
+        
         // 路由匹配
         $routeInfo = $this->dispatcher->dispatch($httpMethod, $uri);
         
         switch ($routeInfo[0]) {
             case Dispatcher::NOT_FOUND:
-                // 404处理
+                // 404处理 - 记录日志
                 http_response_code(404);
+                $this->autoLog('fpm', 404, $uri, $requestStartTime);
                 return "404 Not Found";
                 
             case Dispatcher::METHOD_NOT_ALLOWED:
-                // 405处理
+                // 405处理 - 记录日志
                 http_response_code(405);
+                $this->autoLog('fpm', 405, $uri, $requestStartTime);
                 return "405 Method Not Allowed";
                 
             case Dispatcher::FOUND:
                 $handler = $routeInfo[1];
                 $vars = $routeInfo[2];
                 
-                return $this->executeHandler($handler, $vars, $app, 'fpm');
+                try {
+                    $result = $this->executeHandler($handler, $vars, $app, 'fpm');
+                    $this->autoLog('fpm', 200, $uri, $requestStartTime);
+                    return $result;
+                } catch (\Exception $e) {
+                    $this->autoLog('fpm', 500, $uri, $requestStartTime, $e);
+                    throw $e;
+                }
         }
         
         return null;
@@ -107,14 +121,25 @@ class RouteManager
                 switch ($routeInfo[0]) {
                     case Dispatcher::NOT_FOUND:
                         // 404处理 - 记录日志
-                        $this->logCliRequest($clientIp, $serverIp, $uri, $userAgent, 404, $requestStartTime);
+                        $this->autoLog('cli', 404, $uri, $requestStartTime, null, [
+                            'client_ip' => $clientIp,
+                            'server_ip' => $serverIp,
+                            'user_agent' => $userAgent,
+                            'http_method' => $httpMethod
+                        ]);
                         $resolve(new ReactResponse(404, ['Content-Type' => 'text/plain'], "404 Not Found"));
                         break;
 
                     case Dispatcher::METHOD_NOT_ALLOWED:
                         // 405处理 - 记录日志
                         $allowedMethods = $routeInfo[1];
-                        $this->logCliRequest($clientIp, $serverIp, $uri, $userAgent, 405, $requestStartTime, ['allowed_methods' => $allowedMethods]);
+                        $this->autoLog('cli', 405, $uri, $requestStartTime, null, [
+                            'client_ip' => $clientIp,
+                            'server_ip' => $serverIp,
+                            'user_agent' => $userAgent,
+                            'http_method' => $httpMethod,
+                            'allowed_methods' => $allowedMethods
+                        ]);
                         $resolve(new ReactResponse(
                             405,
                             ['Content-Type' => 'text/plain', 'Allow' => implode(', ', $allowedMethods)],
@@ -129,17 +154,32 @@ class RouteManager
                         $result = $this->executeHandler($handler, $vars, $this->container, 'cli', $request);
 
                         if ($result instanceof ReactResponse) {
-                            $this->logCliRequest($clientIp, $serverIp, $uri, $userAgent, $result->getStatusCode(), $requestStartTime);
+                            $this->autoLog('cli', $result->getStatusCode(), $uri, $requestStartTime, null, [
+                                'client_ip' => $clientIp,
+                                'server_ip' => $serverIp,
+                                'user_agent' => $userAgent,
+                                'http_method' => $httpMethod
+                            ]);
                             $resolve($result);
                         } else {
-                            $this->logCliRequest($clientIp, $serverIp, $uri, $userAgent, 200, $requestStartTime);
+                            $this->autoLog('cli', 200, $uri, $requestStartTime, null, [
+                                'client_ip' => $clientIp,
+                                'server_ip' => $serverIp,
+                                'user_agent' => $userAgent,
+                                'http_method' => $httpMethod
+                            ]);
                             $resolve($this->createResponse($result));
                         }
                         break;
                 }
             } catch (\Exception $e) {
                 // 记录错误日志
-                $this->logCliError($clientIp, $serverIp, $uri, $userAgent, $e, $requestStartTime);
+                $this->autoLog('cli', 500, $uri, $requestStartTime, $e, [
+                    'client_ip' => $clientIp,
+                    'server_ip' => $serverIp,
+                    'user_agent' => $userAgent,
+                    'http_method' => $httpMethod
+                ]);
 
                 // 异常处理 - 使用框架的异常处理器
                 try {
@@ -180,12 +220,12 @@ class RouteManager
             switch ($routeInfo[0]) {
                 case Dispatcher::NOT_FOUND:
                     echo "Shell路由不存在: {$command}\n";
-                    $this->recordShellLog(404, $command, $args);
+                    $this->autoLog('shell', 404, $command, $requestStartTime, null, [], $args);
                     return false;
 
                 case Dispatcher::METHOD_NOT_ALLOWED:
                     echo "Shell路由方法不允许: {$command}\n";
-                    $this->recordShellLog(405, $command, $args);
+                    $this->autoLog('shell', 405, $command, $requestStartTime, null, [], $args);
                     return false;
 
                 case Dispatcher::FOUND:
@@ -204,12 +244,12 @@ class RouteManager
                         }
                     }
 
-                    $this->recordShellLog(0, $command, $args);
+                    $this->autoLog('shell', 0, $command, $requestStartTime, null, [], $args);
                     return true;
             }
         } catch (\Exception $e) {
             // 先设置requestData，确保后续日志记录能获取正确的mode
-            $this->recordShellLog(500, $command, $args);
+            $this->autoLog('shell', 500, $command, $requestStartTime, $e, [], $args);
 
             // 异常处理 - 使用框架的异常处理器
             try {
@@ -266,88 +306,165 @@ class RouteManager
     }
 
     /**
-     * 记录Shell模式日志
+     * 统一的自动日志记录方法
      *
-     * @param int $statusCode 状态码
-     * @param string $command 命令
-     * @param array $args 参数
+     * @param string $mode 运行模式 (fpm, cli, shell)
+     * @param int $statusCode HTTP状态码
+     * @param string $uri 请求URI或命令
+     * @param float $requestStartTime 请求开始时间
+     * @param \Exception|null $exception 异常对象（如果有）
+     * @param array $context 额外上下文信息
+     * @param array $args 命令行参数（仅shell模式使用）
      */
-    protected function recordShellLog(int $statusCode, string $command, array $args)
+    protected function autoLog(string $mode, int $statusCode, string $uri, float $requestStartTime, \Exception $exception = null, array $context = [], array $args = []): void
     {
         try {
             $container = $this->container;
-            if ($container->has('logger')) {
-                $logger = $container->get('logger');
-                $logger->writeLogLine(
-                    $statusCode === 0 ? 'info' : 'error',
+            if (!$container->has('logger')) {
+                return;
+            }
+            
+            $logger = $container->get('logger');
+            
+            // 确定日志级别
+            $logLevel = $exception ? 'error' : ($statusCode >= 400 ? 'error' : 'info');
+            
+            // 获取基础信息
+            list($clientIp, $serverIp, $userAgent, $httpMethod) = $this->getRequestInfo($mode, $context);
+            
+            // 计算响应时间
+            $elapsedTime = round((microtime(true) - $requestStartTime) * 1000, 2);
+            
+            // 准备请求数据
+            $requestData = $this->prepareRequestData($mode, $context, $args);
+            
+            // 记录日志
+            $logger->writeLogLine(
+                $logLevel,
+                $clientIp,
+                $serverIp,
+                $elapsedTime,
+                $statusCode,
+                $httpMethod,
+                $uri,
+                json_encode($requestData, JSON_UNESCAPED_UNICODE),
+                $userAgent,
+                $exception ? $exception->getMessage() : ""
+            );
+            
+        } catch (\Exception $e) {
+            // 静默处理，避免影响请求
+        }
+    }
+
+    /**
+     * 获取请求信息
+     *
+     * @param string $mode 运行模式
+     * @param array $context 上下文信息
+     * @return array [clientIp, serverIp, userAgent, httpMethod]
+     */
+    protected function getRequestInfo(string $mode, array $context): array
+    {
+        switch ($mode) {
+            case 'fpm':
+                return [
+                    $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
+                    $_SERVER['SERVER_ADDR'] ?? '127.0.0.1',
+                    $_SERVER['HTTP_USER_AGENT'] ?? '',
+                    $_SERVER['REQUEST_METHOD'] ?? 'GET'
+                ];
+                
+            case 'cli':
+                return [
+                    $context['client_ip'] ?? '127.0.0.1',
+                    $context['server_ip'] ?? '127.0.0.1',
+                    $context['user_agent'] ?? '',
+                    $context['http_method'] ?? 'GET'
+                ];
+                
+            case 'shell':
+                return [
                     '127.0.0.1',
                     '127.0.0.1',
-                    0,
-                    $statusCode,
-                    'SHELL',
-                    $command,
-                    json_encode($args, JSON_UNESCAPED_UNICODE),
                     'shell',
-                    ''
-                );
-            }
-        } catch (\Exception $e) {
+                    'SHELL'
+                ];
+                
+            default:
+                return ['127.0.0.1', '127.0.0.1', '', 'GET'];
         }
     }
 
     /**
-     * 记录CLI模式的HTTP请求日志
+     * 准备请求数据
      *
-     * @param string $clientIp 客户端IP
-     * @param string $serverIp 服务器IP
-     * @param string $uri 请求URI
-     * @param string $userAgent User-Agent
-     * @param int $statusCode 状态码
-     * @param float $requestStartTime 请求开始时间
-     * @param array $context 额外上下文
+     * @param string $mode 运行模式
+     * @param array $context 上下文信息
+     * @param array $args 命令行参数
+     * @return array
      */
-    protected function logCliRequest(string $clientIp, string $serverIp, string $uri, string $userAgent, int $statusCode, float $requestStartTime, array $context = []): void
+    protected function prepareRequestData(string $mode, array $context, array $args): array
     {
-        try {
-            $container = $this->container;
-            if ($container->has('logger')) {
-                $logger = $container->get('logger');
-
-                $elapsedTime = round((microtime(true) - $requestStartTime) * 1000, 2);
-
-                $requestData = $this->prepareCliRequestData($container, $context);
-
-                $logger->writeLogLine('info', $clientIp, $serverIp, $elapsedTime, $statusCode, $context['http_method'] ?? 'GET', $uri, json_encode($requestData, JSON_UNESCAPED_UNICODE), $userAgent, "");
-            }
-        } catch (\Exception $e) {
-            // 静默处理，避免影响请求
+        switch ($mode) {
+            case 'fpm':
+                return [
+                    'query' => $_GET ?? [],
+                    'post' => $_POST ?? [],
+                    'json' => $this->getJsonRequestBody(),
+                    'files' => $_FILES ?? []
+                ];
+                
+            case 'cli':
+                return $context['request_data'] ?? [
+                    'query' => [],
+                    'post' => [],
+                    'json' => [],
+                    'files' => []
+                ];
+                
+            case 'shell':
+                return ['args' => $args];
+                
+            default:
+                return [];
         }
     }
 
     /**
-     * 记录CLI模式的错误日志
+     * 准备FPM请求数据
      *
-     * @param string $clientIp 客户端IP
-     * @param string $serverIp 服务器IP
-     * @param string $uri 请求URI
-     * @param string $userAgent User-Agent
-     * @param \Exception $exception 异常对象
-     * @param float $requestStartTime 请求开始时间
+     * @return array
      */
-    protected function logCliError(string $clientIp, string $serverIp, string $uri, string $userAgent, \Exception $exception, float $requestStartTime): void
+    protected function prepareFpmRequestData(): array
     {
-        try {
-            $container = $this->container;
-            if ($container->has('logger')) {
-                $logger = $container->get('logger');
+        return [
+            'query' => $_GET ?? [],
+            'post' => $_POST ?? [],
+            'json' => $this->getJsonRequestBody(),
+            'files' => $_FILES ?? [],
+        ];
+    }
 
-                $elapsedTime = round((microtime(true) - $requestStartTime) * 1000, 2);
-
-                $logger->writeLogLine('error', $clientIp, $serverIp, $elapsedTime, 500, $context['http_method'] ?? 'GET', $uri, '', $userAgent, "");
+    /**
+     * 获取JSON请求体
+     *
+     * @return array
+     */
+    protected function getJsonRequestBody(): array
+    {
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        
+        if (strpos($contentType, 'application/json') !== false) {
+            $jsonInput = file_get_contents('php://input');
+            $jsonData = json_decode($jsonInput, true);
+            
+            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
+                return $jsonData;
             }
-        } catch (\Exception $e) {
-            // 静默处理，避免影响请求
         }
+        
+        return [];
     }
 
     /**
@@ -399,7 +516,13 @@ class RouteManager
                 if (method_exists($controllerInstance, $actionMethod)) {
                     $reflectionMethod = new \ReflectionMethod($controllerInstance, $actionMethod);
                     $parameters = $reflectionMethod->getParameters();
-
+                    if (method_exists($controllerInstance, 'before')) {
+                        try {
+                            $controllerInstance->before();
+                        } catch (\Exception $e) {
+                            // 处理异常，例如记录日志或返回错误响应
+                        }
+                    }
                     if (count($parameters) > 0) {
                         $firstParam = $parameters[0];
                         $firstParamType = $firstParam->getType();
@@ -432,7 +555,13 @@ class RouteManager
                 if (method_exists($controllerInstance, $actionMethod)) {
                     $reflectionMethod = new \ReflectionMethod($controllerInstance, $actionMethod);
                     $parameters = $reflectionMethod->getParameters();
-
+                    if (method_exists($controllerInstance, 'before')) {
+                        try {
+                            $controllerInstance->before();
+                        } catch (\Exception $e) {
+                            // 处理异常，例如记录日志或返回错误响应
+                        }
+                    }
                     if (count($parameters) > 0) {
                         $firstParam = $parameters[0];
                         $firstParamType = $firstParam->getType();

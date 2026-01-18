@@ -283,42 +283,6 @@ class Application extends Container
     }
 
     /**
-     * 记录Shell模式日志
-     * Record shell mode log
-     *
-     * @param int $statusCode
-     * @param string $command
-     * @param array $args 命令行参数 Command line arguments
-     * @return void
-     */
-    protected function recordShellLog(int $statusCode = 0, string $command = '', array $args = []): void
-    {
-        try {
-            $logger = $this->get('logger');
-            $config = $this->get('config');
-
-            $clientIp = '127.0.0.1';
-            $serverIp = $config->get('app.server_ip', '127.0.0.1');
-            $userAgent = 'Shell';
-            $uri = $command;
-
-            $shellData = [
-                'method' => 'SHELL',
-                'args' => $args,
-            ];
-
-            $logger->setRequestData($shellData);
-            $logger->setRequestStartTime($this->requestStartTime);
-
-            $logger->recordAutoLog($clientIp, $serverIp, $uri, $userAgent, $statusCode);
-
-            $logger->recordManualLogs($clientIp, $serverIp, $uri, $userAgent);
-        } catch (\Exception $e) {
-            error_log('Failed to record shell log: ' . $e->getMessage());
-        }
-    }
-
-    /**
      * 运行FPM模式
      * Run FPM mode
      *
@@ -356,7 +320,7 @@ class Application extends Container
         $routeManager = new RouteManager($dispatcher, $this);
 
         try {
-            $response = $routeManager->handleFpmRequest($httpMethod, $uri, $this);
+            $response = $routeManager->handleFpmRequest($httpMethod, $uri, $this, $this->requestStartTime);
 
             if (is_array($response) || is_object($response)) {
                 header('Content-Type: application/json');
@@ -365,11 +329,7 @@ class Application extends Container
                 echo $response;
             }
 
-            $this->recordRequestLog(200, $uri);
-
         } catch (\Exception $e) {
-            $this->recordErrorLog($e, $uri);
-
             $logger = $this->get('logger');
             
             // 使用配置中定义的异常处理器

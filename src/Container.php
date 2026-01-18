@@ -70,7 +70,7 @@ class Container
     }
 
     /**
-     * 注册核心服务（db、cache、config、log等）
+     * 注册核心服务（db、cache、config、exception）
      */
     protected function registerCoreServices()
     {
@@ -174,9 +174,9 @@ class Container
 
         // Twig模板引擎
         $this->services['twig'] = function () {
-            $loader = new \Twig\Loader\FilesystemLoader(ROOT_PATH . '/resources/templates');
+            $loader = new \Twig\Loader\FilesystemLoader(resource_path('templates'));
             $twig = new \Twig\Environment($loader, [
-                'cache' => RUNTIME_PATH . '/cache/views',
+                'cache' => runtime_path('cache/views'),
                 'debug' => $_ENV['APP_DEBUG'] ?? false,
                 'auto_reload' => true,
             ]);
