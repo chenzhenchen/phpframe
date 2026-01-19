@@ -12,7 +12,9 @@ class Container
     public function __construct(array $config = [])
     {
         $this->config = $config;
+
         $this->registerCoreServices();
+
     }
 
     public static function getInstance(): self
@@ -74,6 +76,7 @@ class Container
      */
     protected function registerCoreServices()
     {
+        // echo "x";
         // 配置服务
         $this->services['config'] = function () {
             $appConfig = $this->loadConfig(CONFIG_PATH . '/app.php');
@@ -113,14 +116,15 @@ class Container
 
             $dbManager = new Database\DatabaseManager($capsule);
 
-            $isReactPHP = PHP_SAPI === 'cli' && isset($_SERVER['argv']) && in_array('--react', $_SERVER['argv'] ?? [], true);
-            $usePersistent = ($_ENV['DB_PERSISTENT'] ?? 'false') === 'true' || $isReactPHP;
+            // 根据APP_MODE优化连接策略
+            $appMode = defined('APP_MODE') ? APP_MODE : 'fpm';
+            
+            // CLI模式总是使用持久连接，其他模式根据环境变量决定
+            $usePersistent = ($appMode === 'cli') || ($_ENV['DB_PERSISTENT'] ?? 'false') === 'true';
 
             if ($usePersistent) {
                 $dbManager->enablePersistentConnections(true);
             }
-
-            $dbManager->setRuntimeMode($isReactPHP ? 'react' : 'fpm');
 
             return $dbManager;
         };
@@ -231,9 +235,9 @@ class Container
                     $this->container = $container;
                 }
 
-                public function environment()
+                public function env()
                 {
-                    return $_ENV['APP_ENV'] ?? 'production';
+                    return $_ENV['APP_ENV'] ?? 'prod';
                 }
 
                 public function isDebug()
@@ -336,48 +340,9 @@ class Container
         return $service;
     }
 
-    public function registerFromServicesConfig()
-    {
-        $servicesConfig = $this->config['services'] ?? [];
-
-        foreach ($servicesConfig as $id => $config) {
-            if ($id === 'auto_register' || $id === 'service_providers') continue;
-
-            if (!isset($this->instances[$id]) && !isset($this->services[$id])) {
-                $this->registerFromConfig($id, $config);
-            }
-        }
-    }
-
-    public function registerFromServiceProviders($group = null)
-    {
-        $providers = $this->config['service_providers'] ?? [];
-
-        if ($group && isset($providers[$group])) {
-            foreach ($providers[$group] as $serviceId) {
-                if (!isset($this->instances[$serviceId])) {
-                    $this->get($serviceId);
-                }
-            }
-        } elseif (!$group) {
-            foreach ($providers as $groupServices) {
-                foreach ($groupServices as $serviceId) {
-                    if (!isset($this->instances[$serviceId])) {
-                        $this->get($serviceId);
-                    }
-                }
-            }
-        }
-    }
-
     public function getRegisteredServices(): array
     {
         return array_merge(array_keys($this->services), array_keys($this->instances));
-    }
-
-    public function getServiceProviderGroups(): array
-    {
-        return array_keys($this->config['service_providers'] ?? []);
     }
 
     private function resolveInterface($interfaceName)

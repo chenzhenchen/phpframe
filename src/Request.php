@@ -36,11 +36,9 @@ class Request
         
         if ($mode === 'fpm') {
             return $this->params[$key] ?? $_REQUEST[$key] ?? $default;
-        } elseif ($mode === 'cli') {
-            return $this->params[$key] ?? $default;
         }
 
-        return $default;
+        return $this->params[$key] ?? $default;
     }
 
     public function all(): array
@@ -49,11 +47,9 @@ class Request
         
         if ($mode === 'fpm') {
             return array_merge($_REQUEST, $this->params);
-        } elseif ($mode === 'cli') {
-            return $this->params;
         }
 
-        return [];
+        return $this->params;
     }
 
     public function has(string $key): bool

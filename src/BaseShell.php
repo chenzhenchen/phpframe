@@ -43,27 +43,7 @@ abstract class BaseShell
     {
         $this->request->setParams($params);
     }
-    
-    /**
-     * 解析命令行参数
-     * Parse command line arguments
-     */
-    protected function parseArgs(array $args): array
-    {
-        $params = [];
-        
-        foreach ($args as $arg) {
-            if (strpos($arg, '=') !== false) {
-                list($key, $value) = explode('=', $arg, 2);
-                $params[$key] = $value;
-            } else {
-                $params[] = $arg;
-            }
-        }
-        
-        return $params;
-    }
-    
+
     /**
      * 输出信息到控制台
      * Output message to console

@@ -43,11 +43,12 @@ if (!function_exists('config')) {
      */
     function config($key = null, $default = null)
     {
-        $config = app('config');
-        if (is_null($key)) {
-            return $config->all();
-        }
-        return $config->get($key, $default);
+//        $config = app('config') ;
+//        if (is_null($key)) {
+//            return $config->all();
+//        }
+//        return $config->get($key, $default);
+        return \PHPFrame\Facades\Config::get($key, $default);
     }
 }
 

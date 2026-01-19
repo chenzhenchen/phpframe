@@ -280,32 +280,6 @@ class RouteManager
     }
 
     /**
-     * 解析Shell命令参数
-     *
-     * @param array $args 原始参数
-     * @return array
-     */
-    protected function parseShellArgs(array $args)
-    {
-        $positional = [];
-        $named = [];
-
-        foreach ($args as $arg) {
-            if (strpos($arg, '=') !== false) {
-                list($key, $value) = explode('=', $arg, 2);
-                $named[$key] = $value;
-            } else {
-                $positional[] = $arg;
-            }
-        }
-
-        return [
-            'args' => $positional,
-            'options' => $named
-        ];
-    }
-
-    /**
      * 统一的自动日志记录方法
      *
      * @param string $mode 运行模式 (fpm, cli, shell)
@@ -483,7 +457,26 @@ class RouteManager
             'files' => [],
         ];
     }
-    
+
+    /**
+     * 解析命令行参数
+     * Parse command line arguments
+     */
+    protected function parseArgs(array $args): array
+    {
+        $params = [];
+
+        foreach ($args as $arg) {
+            if (strpos($arg, '=') !== false) {
+                list($key, $value) = explode('=', $arg, 2);
+                $params[$key] = $value;
+            } else {
+                $params[] = $arg;
+            }
+        }
+
+        return $params;
+    }
     /**
      * 执行路由处理器
      *
@@ -498,9 +491,11 @@ class RouteManager
     protected function executeHandler($handler, array $vars, $container, $mode = 'fpm', ServerRequestInterface $request = null, array $shellArgs = [])
     {
         if ($mode === 'shell' && !empty($shellArgs)) {
-            $vars = array_merge($vars, $shellArgs);
+            $shellArgs = $this->parseArgs($shellArgs);
+            if ($shellArgs && count($shellArgs) > 0) {
+                $vars = array_merge($vars, $shellArgs);
+            }
         }
-
         if (is_callable($handler)) {
             return call_user_func_array($handler, $vars);
         }
@@ -514,8 +509,6 @@ class RouteManager
                 $this->setRequestParams($controllerInstance, $vars, $mode, $request);
                 
                 if (method_exists($controllerInstance, $actionMethod)) {
-                    $reflectionMethod = new \ReflectionMethod($controllerInstance, $actionMethod);
-                    $parameters = $reflectionMethod->getParameters();
                     if (method_exists($controllerInstance, 'before')) {
                         try {
                             $controllerInstance->before();
@@ -523,20 +516,8 @@ class RouteManager
                             // 处理异常，例如记录日志或返回错误响应
                         }
                     }
-                    if (count($parameters) > 0) {
-                        $firstParam = $parameters[0];
-                        $firstParamType = $firstParam->getType();
-                        $firstParamName = $firstParam->getName();
-
-                        if (($firstParamType && $firstParamType->getName() === 'array' && !$firstParam->isVariadic())
-                            || ($mode === 'shell' && in_array($firstParamName, ['args', 'params', 'arguments', 'options']))) {
-                            return $reflectionMethod->invoke($controllerInstance, $vars);
-                        }
-
-                        return $reflectionMethod->invokeArgs($controllerInstance, $vars);
-                    } else {
-                        return $controllerInstance->$actionMethod();
-                    }
+                    
+                    return $controllerInstance->$actionMethod();
                 } else {
                     throw new \RuntimeException("Action not found: {$actionMethod}");
                 }
@@ -553,8 +534,6 @@ class RouteManager
                 $this->setRequestParams($controllerInstance, $vars, $mode, $request);
 
                 if (method_exists($controllerInstance, $actionMethod)) {
-                    $reflectionMethod = new \ReflectionMethod($controllerInstance, $actionMethod);
-                    $parameters = $reflectionMethod->getParameters();
                     if (method_exists($controllerInstance, 'before')) {
                         try {
                             $controllerInstance->before();
@@ -562,20 +541,8 @@ class RouteManager
                             // 处理异常，例如记录日志或返回错误响应
                         }
                     }
-                    if (count($parameters) > 0) {
-                        $firstParam = $parameters[0];
-                        $firstParamType = $firstParam->getType();
-                        $firstParamName = $firstParam->getName();
-
-                        if (($firstParamType && $firstParamType->getName() === 'array' && !$firstParam->isVariadic())
-                            || ($mode === 'shell' && in_array($firstParamName, ['args', 'params', 'arguments', 'options']))) {
-                            return $reflectionMethod->invoke($controllerInstance, $vars);
-                        }
-
-                        return $reflectionMethod->invokeArgs($controllerInstance, $vars);
-                    } else {
-                        return $controllerInstance->$actionMethod();
-                    }
+                    
+                    return $controllerInstance->$actionMethod();
                 } else {
                     throw new \RuntimeException("Action not found: {$actionMethod}");
                 }
@@ -601,21 +568,14 @@ class RouteManager
         // 如果控制器是BaseController的实例，设置请求参数
         if ($controller instanceof BaseController) {
             if ($mode === 'fpm') {
-                // FPM模式：总是设置请求参数，即使路由参数为空
                 $controller->setFpmParams($routeParams);
             } elseif ($mode === 'cli' && $request !== null) {
-                // CLI模式：设置完整的请求参数
                 $this->setCliRequestParams($controller, $request, $routeParams);
             }
         }
-
         // 如果控制器是BaseShell的实例，设置Shell模式参数
-        if ($controller instanceof BaseShell && $mode === 'shell' && !empty($shellArgs)) {
-            $parsedArgs = $this->parseShellArgs($shellArgs);
-            $shellParams = array_merge($parsedArgs['args'], $parsedArgs['options']);
-            $shellParams['__args__'] = $parsedArgs['args'];
-            $shellParams['__options__'] = $parsedArgs['options'];
-            $controller->setShellParams($shellParams);
+        if ($controller instanceof BaseShell && $mode === 'shell') {
+            $controller->setShellParams($routeParams);
         }
     }
     

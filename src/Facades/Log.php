@@ -17,11 +17,6 @@ use PHPFrame\Facade;
  * @method static void info(string $message, array $context = []) 记录信息级别的日志
  * @method static void debug(string $message, array $context = []) 记录调试级别的日志
  * @method static void log(int|string $level, string $message, array $context = []) 记录指定级别的日志
- * @method static void setRequestData(array $data) 设置请求数据
- * @method static void setRequestStartTime(float $time) 设置请求开始时间
- * @method static void recordAutoLog(string $clientIp, string $serverIp, string $uri, string $userAgent, int $statusCode = 200) 记录自动日志
- * @method static void recordManualLogs(string $clientIp, string $serverIp, string $uri, string $userAgent) 记录手动日志
- * @method static void recordErrorLog(string $clientIp, string $serverIp, string $uri, string $userAgent, string $errorMessage, string $stackTrace = '') 记录错误日志
  */
 class Log extends Facade
 {

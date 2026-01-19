@@ -44,6 +44,8 @@ class Application extends Container
     {
         $this->requestStartTime = microtime(true);
         static::setInstance($this);
+        
+        // 初始化应用
         $this->initialize();
     }
 
@@ -82,27 +84,91 @@ class Application extends Container
      */
     protected function initialize()
     {
-        $this->registerCoreServices();
-
-        $this->registerFromServicesConfig();
-
-        $this->registerFromServiceProviders();
-    }
-
-    /**
-     * 启动应用
-     * Boot application
-     *
-     * @return void
-     */
-    public function boot()
-    {
-        if ($this->booted) {
+        static $initialized = false;
+        
+        // 确保初始化逻辑只执行一次
+        if ($initialized) {
             return;
         }
+        $initialized = true;
+        
+        // 定义框架常量
+        if (!defined('RUNTIME_PATH')) {
+            define('RUNTIME_PATH', ROOT_PATH . '/runtime');
+        }
+        if (!defined('CONFIG_PATH')) {
+            define('CONFIG_PATH', ROOT_PATH . '/config');
+        }
+        if (!defined('ROUTES_PATH')) {
+            define('ROUTES_PATH', ROOT_PATH . '/routes');
+        }
 
-        $this->booted = true;
+        // 加载环境变量（优化性能）
+        if (file_exists(ROOT_PATH . '/.env')) {
+            static $envLoaded = false;
+            
+            if (!$envLoaded) {
+                $envContent = file_get_contents(ROOT_PATH . '/.env');
+                $lines = explode("\n", $envContent);
+                
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if (empty($line) || strpos($line, '#') === 0) {
+                        continue;
+                    }
+                    
+                    if (strpos($line, '=') !== false) {
+                        list($key, $value) = explode('=', $line, 2);
+                        $key = trim($key);
+                        $value = trim($value);
+                        
+                        // 移除引号
+                        if (preg_match('/^"(.*)"$/', $value, $matches) || preg_match('/^\'(.*)\'$/', $value, $matches)) {
+                            $value = $matches[1];
+                        }
+                        
+                        $_ENV[$key] = $value;
+                        $_SERVER[$key] = $value;
+                        putenv("$key=$value");
+                    }
+                }
+                $envLoaded = true;
+            }
+        }
+
+        // 设置时区
+        date_default_timezone_set($_ENV['APP_TIMEZONE']??'Asia/Shanghai');
+
+        // 创建必要的目录
+        $requiredDirs = [
+            RUNTIME_PATH . '/logs',
+            RUNTIME_PATH . '/cache',
+        ];
+
+        foreach ($requiredDirs as $dir) {
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+        }
+        
+        $this->registerCoreServices();
+
+        if ($exceptionHandler = config('exception.handler')) {
+            $this->set($exceptionHandler, function($c) use ($exceptionHandler) {
+                return new $exceptionHandler(
+                    $c->get('logger'),
+                    $c->get('config')->get('exception')
+                );
+            });
+
+            set_exception_handler(function($exception) use ($exceptionHandler) {
+                $handler = $this->get($exceptionHandler);
+                $mode = PHP_SAPI === 'cli' ? 'cli' : 'fpm';
+                return $handler->handle($exception, $mode);
+            });
+        }
     }
+
 
     /**
      * 运行应用
@@ -112,8 +178,6 @@ class Application extends Container
      */
     public function run()
     {
-        $this->boot();
-
         $mode = APP_MODE ?? 'fpm';
 
         switch ($mode) {
@@ -180,108 +244,6 @@ class Application extends Container
         }
         return '';
     }
-
-    /**
-     * 准备请求数据
-     * Prepare request data
-     *
-     * @return array
-     */
-    protected function prepareRequestData(): array
-    {
-        $request = $this->get('request');
-        $data = [];
-
-        if (Runtime::isFpm()) {
-            $data['method'] = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-            $data['get'] = $_GET;
-            $data['post'] = $_POST;
-            $data['json'] = $request->getJsonBody();
-            $data['files'] = $_FILES;
-        } elseif (Runtime::isCli()) {
-            $data['method'] = 'GET';
-            $data['get'] = [];
-            $data['post'] = [];
-            $data['json'] = [];
-            $data['files'] = [];
-        } elseif (Runtime::isShell()) {
-            $data['method'] = 'SHELL';
-            $data['get'] = [];
-            $data['post'] = [];
-            $data['json'] = [];
-            $data['files'] = [];
-        }
-
-        return $data;
-    }
-
-    /**
-     * 记录请求日志
-     * Record request log
-     *
-     * @param int $statusCode
-     * @param string $uri
-     * @return void
-     */
-    protected function recordRequestLog(int $statusCode = 200, string $uri = ''): void
-    {
-        try {
-            $logger = $this->get('logger');
-            $request = $this->get('request');
-
-            $clientIp = $this->getClientIp();
-            $serverIp = $this->getServerIp();
-            $userAgent = $this->getUserAgent();
-            $uri = $uri ?: $request->getUri();
-
-            $requestData = $this->prepareRequestData();
-            $logger->setRequestData($requestData);
-            $logger->setRequestStartTime($this->requestStartTime);
-
-            $logger->recordAutoLog($clientIp, $serverIp, $uri, $userAgent, $statusCode);
-
-            $logger->recordManualLogs($clientIp, $serverIp, $uri, $userAgent);
-        } catch (\Exception $e) {
-            error_log('Failed to record request log: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * 记录错误日志
-     * Record error log
-     *
-     * @param \Exception $e
-     * @param string $uri
-     * @return void
-     */
-    protected function recordErrorLog(\Exception $e, string $uri = ''): void
-    {
-        try {
-            $logger = $this->get('logger');
-            $request = $this->get('request');
-
-            $clientIp = $this->getClientIp();
-            $serverIp = $this->getServerIp();
-            $userAgent = $this->getUserAgent();
-            $uri = $uri ?: $request->getUri();
-
-            $requestData = $this->prepareRequestData();
-            $logger->setRequestData($requestData);
-            $logger->setRequestStartTime($this->requestStartTime);
-
-            $logger->recordErrorLog(
-                $clientIp,
-                $serverIp,
-                $uri,
-                $userAgent,
-                $e->getMessage(),
-                $e->getTraceAsString()
-            );
-        } catch (\Exception $e) {
-            error_log('Failed to record error log: ' . $e->getMessage());
-        }
-    }
-
     /**
      * 运行FPM模式
      * Run FPM mode
@@ -480,9 +442,9 @@ class Application extends Container
         if (!$command) {
             echo "Usage: php shell.php controller/action [args...]\n";
             echo "Parameter format:\n";
-            echo "  Positional arguments: php shell.php user/create John 25\n";
+            // echo "  Positional arguments: php shell.php user/create John 25\n";
             echo "  Key-value arguments: php shell.php user/create name=John age=25\n";
-            echo "  Mixed arguments: php shell.php user/create John age=25\n";
+            // echo "  Mixed arguments: php shell.php user/create John age=25\n";
             exit(1);
         }
 
