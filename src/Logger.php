@@ -13,9 +13,6 @@ class Logger
     public const NOTICE = 'notice';
     public const WARNING = 'warning';
     public const ERROR = 'error';
-    public const CRITICAL = 'critical';
-    public const ALERT = 'alert';
-    public const EMERGENCY = 'emergency';
 
     protected static $instance = null;
 
@@ -35,7 +32,7 @@ class Logger
         $this->logPath = $config['path'] ?? runtime_path('logs');
         $this->filename = $config['filename'] ?? 'phpframe';
         $this->dateFormat = $config['format'] ?? 'Y-m-d';
-        $this->channel = 'phpframe';
+        $this->channel = $config['channel'] ?? 'phpframe';
 
         if (!is_dir($this->logPath)) {
             @mkdir($this->logPath, 0755, true);
@@ -68,14 +65,14 @@ class Logger
     public function getLogFilePath(): string
     {
         $currentDate = date($this->dateFormat);
-        
+
         if ($this->cachedLogPath !== null && $this->cachedDate === $currentDate) {
             return $this->cachedLogPath;
         }
-        
+
         $this->cachedDate = $currentDate;
         $this->cachedLogPath = $this->logPath . DIRECTORY_SEPARATOR . $this->filename . '_' . $currentDate . '.log';
-        
+
         return $this->cachedLogPath;
     }
 
@@ -92,26 +89,6 @@ class Logger
     public function getRequestData(): array
     {
         return $this->requestData;
-    }
-
-    public function addManualLog(string $level, string $message, array $context = []): void
-    {
-        $this->manualLogs[] = [
-            'level' => $level,
-            'message' => $message,
-            'context' => $context,
-            'time' => microtime(true),
-        ];
-    }
-
-    public function getManualLogs(): array
-    {
-        return $this->manualLogs;
-    }
-
-    public function clearManualLogs(): void
-    {
-        $this->manualLogs = [];
     }
 
     public function info(string $message, array $context = []): void
@@ -139,74 +116,21 @@ class Logger
         $this->addManualLog('notice', $message, $context);
     }
 
-    public function alert(string $message, array $context = []): void
+    private function addManualLog(string $level, string $message, array $context = []): void
     {
-        $this->addManualLog('alert', $message, $context);
-    }
-
-    public function critical(string $message, array $context = []): void
-    {
-        $this->addManualLog('critical', $message, $context);
-    }
-
-    public function emergency(string $message, array $context = []): void
-    {
-        $this->addManualLog('emergency', $message, $context);
-    }
-
-    public function recordAutoLog(string $clientIp, string $serverIp, string $uri, string $userAgent, int $statusCode = 200): void
-    {
-        $requestData = $this->prepareRequestData();
-        $requestDataStr = !empty($requestData) ? json_encode($requestData, JSON_UNESCAPED_UNICODE) : '';
-
-        $elapsedTime = 0;
-        if ($this->requestStartTime) {
-            $elapsedTime = round((microtime(true) - $this->requestStartTime) * 1000, 2);
-        }
-
-        $logLine = $this->buildLogLine('info', $clientIp, $serverIp, $elapsedTime, $statusCode, $this->requestData['method'] ?? 'UNKNOWN', $uri, $requestDataStr, $userAgent, "");
-
-        $this->writeLog($logLine);
-    }
-
-    public function recordManualLogs(string $clientIp, string $serverIp, string $uri, string $userAgent): void
-    {
-        foreach ($this->manualLogs as $log) {
-            $requestData = $this->prepareRequestData();
-            $requestDataStr = !empty($requestData) ? json_encode($requestData, JSON_UNESCAPED_UNICODE) : '';
-
-            $contextStr = !empty($log['context']) ? ' ' . json_encode($log['context'], JSON_UNESCAPED_UNICODE) : '';
-            $logContent = $log['message'] . $contextStr;
-
-            $logLine = $this->buildLogLine($log['level'], $clientIp, $serverIp, 0, 0, $this->requestData['method'] ?? 'UNKNOWN', $uri, $requestDataStr, $userAgent, $logContent);
-
-            $this->writeLog($logLine);
-        }
-    }
-
-    public function recordErrorLog(string $clientIp, string $serverIp, string $uri, string $userAgent, string $errorMessage, string $stackTrace = ''): void
-    {
-        $requestData = $this->prepareRequestData();
-        $requestDataStr = !empty($requestData) ? json_encode($requestData, JSON_UNESCAPED_UNICODE) : '';
-
-        $content = [
-            'type' => 'error',
-            'message' => $errorMessage,
-            'stack_trace' => $stackTrace,
+        $this->manualLogs[] = [
+            'level' => $level,
+            'message' => $message,
+            'context' => $context,
+            'time' => date('Y-m-d H:i:s'),
         ];
-
-        $logContent = json_encode($content, JSON_UNESCAPED_UNICODE);
-
-        $logLine = $this->buildLogLine('error', $clientIp, $serverIp,  0, 0, $this->requestData['method'] ?? 'UNKNOWN', $uri, $requestDataStr, $userAgent, $logContent);
-
-        $this->writeLog($logLine);
     }
 
-    protected function buildLogLine(string $level, string $clientIp, string $serverIp, 
-    string $elapsedTime, int $statusCode, string $method, string $uri, string $requestData, 
-    string $userAgent, string $content): string
+    protected function buildLogLine(string $time, string $level, string $clientIp, string $serverIp,
+                                    string $elapsedTime, int $statusCode, string $method, string $uri, string $requestData,
+                                    string $userAgent, string $content): string
     {
-        $time = date('Y-m-d H:i:s');
+
         return implode('|', [
             $time,
             $level,
@@ -222,7 +146,7 @@ class Logger
         ]);
     }
 
-    protected function writeLog(string $logLine): void
+    protected function doWriteLog(string $logLine): void
     {
         @file_put_contents($this->getLogFilePath(), $logLine . PHP_EOL, FILE_APPEND | LOCK_EX);
     }
@@ -258,14 +182,14 @@ class Logger
         $uri = $context['uri'] ?? '';
         $userAgent = $context['user_agent'] ?? '';
         $method = strtoupper($context['method'] ?? $this->requestData['method'] ?? Runtime::detect());
-        
+
         $requestData = $this->prepareRequestData();
         $requestDataStr = !empty($requestData) ? json_encode($requestData, JSON_UNESCAPED_UNICODE) : '';
-        
+
         $contextStr = !empty($context) ? ' ' . json_encode($context, JSON_UNESCAPED_UNICODE) : '';
         $logContent = $message . $contextStr;
-        
-        $this->writeLogLine(
+        $this->writeLog(
+            date('Y-m-d H:i:s'),
             $level,
             $clientIp,
             $serverIp,
@@ -279,11 +203,22 @@ class Logger
         );
     }
 
-    public function writeLogLine(string $level, string $clientIp, string $serverIp, 
-    string $elapsedTime, int $statusCode, string $method, string $uri, string $requestData, 
-    string $userAgent, string $content): void
+    public function writeLog(string $time, string $level, string $clientIp, string $serverIp,
+                             string $elapsedTime, int $statusCode, string $method, string $uri, string $requestData,
+                             string $userAgent, string $content): void
     {
-        $logLine = $this->buildLogLine(
+        $logLine = [];
+
+        if (!empty($this->manualLogs)) {
+            foreach ($this->manualLogs as $log) {
+                $logContent = $log['message'] . json_encode($log['context'], JSON_UNESCAPED_UNICODE);
+                $logLine[] = $this->buildLogLine($log['time'], $log['level'], $clientIp, $serverIp, 0, 0, "", $uri, "", "", $logContent);
+            }
+            $this->manualLogs = [];
+        }
+
+        $logLine[] = $this->buildLogLine(
+            $time,
             $level,
             $clientIp,
             $serverIp,
@@ -296,6 +231,6 @@ class Logger
             $content
         );
 
-        $this->writeLog($logLine);
+        $this->doWriteLog(implode("\n", $logLine));
     }
 }

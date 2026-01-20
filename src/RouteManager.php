@@ -311,9 +311,10 @@ class RouteManager
             
             // 准备请求数据
             $requestData = $this->prepareRequestData($mode, $context, $args);
-            
+
             // 记录日志
-            $logger->writeLogLine(
+            $logger->writeLog(
+                date('Y-m-d H:i:s'),
                 $logLevel,
                 $clientIp,
                 $serverIp,
@@ -361,7 +362,7 @@ class RouteManager
                 return [
                     '127.0.0.1',
                     '127.0.0.1',
-                    'shell',
+                    '',
                     'SHELL'
                 ];
                 
