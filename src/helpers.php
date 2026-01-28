@@ -8,7 +8,8 @@ if (!defined('PHPFRAME_PATH')) {
 
 if (!defined('ROOT_PATH')) {
     if (!$rootPath = Phar::running()) {
-        $rootPath = getcwd();
+        //$rootPath = getcwd();
+        $rootPath = __DIR__;
         while ($rootPath !== dirname($rootPath)) {
             if (@is_dir("$rootPath/vendor")) {
                 break;
