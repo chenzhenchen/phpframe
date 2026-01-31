@@ -16,7 +16,7 @@ if (!defined('ROOT_PATH')) {
             $rootPath = dirname($rootPath);
         }
         if ($rootPath === dirname($rootPath)) {
-            exit('Please define the ROOT_PATH constant in your public/index.php file.');
+            $rootPath = __DIR__ . '/../../../../';
         }
     }
     define('ROOT_PATH', realpath($rootPath) ?: $rootPath);

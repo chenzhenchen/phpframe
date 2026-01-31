@@ -46,8 +46,6 @@ use PHPFrame\Facade;
  * @method static float zscore(string $key, mixed $member) 获取有序集合成员分数
  * @method static int zrem(string $key, mixed $member) 有序集合移除成员
  * @method static bool select(int $db) 选择数据库
- * @method static bool flushdb() 清空当前数据库
- * @method static bool flushall() 清空所有数据库
  * @method static array info(string $section = null) 获取Redis信息
  * @method static int dbsize() 获取数据库键数量
  * @method static string ping() Ping服务器

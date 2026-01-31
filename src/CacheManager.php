@@ -24,6 +24,8 @@ class CacheManager
 
     protected $prefix = '';
 
+    protected $ttl = 86400;
+
     /**
      * 构造函数
      * Constructor
@@ -34,6 +36,7 @@ class CacheManager
     {
         $this->cache = $cache;
         $this->prefix = config('cache.prefix', '');
+        $this->ttl = config('cache.ttl', $this->ttl);
     }
 
     /**
@@ -44,7 +47,7 @@ class CacheManager
      * @return string
      */
     private function getKey(string $key) {
-        // 支持多服务共享key
+        // 支持多服务共享key，以@开头的key不添加前缀
         if (str_starts_with($key, '@')) {
             $key = substr($key, 1);
         } else {
@@ -62,7 +65,6 @@ class CacheManager
      */
     public function get(string $key, $default = null): mixed
     {
-
         $value = $this->cache->get($this->getKey($key), $default);
         return $value;
     }
@@ -78,7 +80,7 @@ class CacheManager
      */
     public function set(string $key, $value, $ttl = null): bool
     {
-        $result = $this->cache->set($this->getKey($key), $value, $ttl ?? 3600);
+        $result = $this->cache->set($this->getKey($key), $value, $ttl ?? $this->ttl);
         return $result;
     }
 
@@ -217,26 +219,7 @@ class CacheManager
     {
         return $this->cache;
     }
-
-    /**
-     * 检查缓存驱动是否支持某个功能
-     * Check if cache driver supports a feature
-     *
-     * @param string $feature 功能名称 Feature name
-     * @return bool
-     */
-    public function supports(string $feature): bool
-    {
-        $driver = config('cache.default');
-
-        $supportedFeatures = [
-            'redis' => ['pattern_delete', 'tags', 'persistence'],
-            'file' => ['persistence']
-        ];
-
-        return in_array($feature, $supportedFeatures[$driver] ?? []);
-    }
-
+    
     /**
      * 拉取缓存值（获取后删除）
      * Pull cache value (get and delete)
