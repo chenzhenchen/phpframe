@@ -60,12 +60,17 @@ abstract class BaseController
     
     /**
      * 设置请求参数（用于FPM模式）
-     * Set request parameters (for FPM mode)
+     * 通过 Request 对象获取参数，避免直接访问 $_REQUEST
      */
     public function setFpmParams(array $routeParams = []): void
     {
-        // 合并路由参数和请求参数
-        $params = array_merge($_REQUEST, $routeParams);
+        // 从 Request 对象获取 GET + POST 参数
+        $request = $this->request;
+        $params = array_merge(
+            $request->query(),
+            $request->post(),
+            $routeParams
+        );
         $this->request->setParams($params);
     }
     
@@ -215,56 +220,27 @@ abstract class BaseController
     
     /**
      * 验证请求参数
-     * Validate request parameters
+     * 委托给 Validation 类，避免重复验证逻辑
      */
     protected function validate(array $rules, array $messages = []): array
     {
         $params = $this->getParams();
-        $errors = [];
-        
-        foreach ($rules as $field => $rule) {
-            $value = $params[$field] ?? null;
-            
-            if (strpos($rule, 'required') !== false && empty($value)) {
-                $errors[$field] = $messages[$field] ?? "{$field} 是必填字段";
-                continue;
-            }
-            
-            if (!empty($value)) {
-                if (strpos($rule, 'email') !== false && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
-                    $errors[$field] = $messages[$field] ?? "{$field} 必须是有效的邮箱地址";
-                }
-                
-                if (strpos($rule, 'numeric') !== false && !is_numeric($value)) {
-                    $errors[$field] = $messages[$field] ?? "{$field} 必须是数字";
-                }
-                
-                if (strpos($rule, 'min:') !== false) {
-                    preg_match('/min:(\\d+)/', $rule, $matches);
-                    $min = $matches[1] ?? 0;
-                    if (is_numeric($value) && $value < $min) {
-                        $errors[$field] = $messages[$field] ?? "{$field} 不能小于 {$min}";
-                    } elseif (is_string($value) && mb_strlen($value) < $min) {
-                        $errors[$field] = $messages[$field] ?? "{$field} 长度不能小于 {$min}";
-                    }
-                }
-                
-                if (strpos($rule, 'max:') !== false) {
-                    preg_match('/max:(\\d+)/', $rule, $matches);
-                    $max = $matches[1] ?? 0;
-                    if (is_numeric($value) && $value > $max) {
-                        $errors[$field] = $messages[$field] ?? "{$field} 不能大于 {$max}";
-                    } elseif (is_string($value) && mb_strlen($value) > $max) {
-                        $errors[$field] = $messages[$field] ?? "{$field} 长度不能大于 {$max}";
+        $validator = new Validation();
+        $isValid = $validator->validate($params, $rules);
+
+        if (!$isValid) {
+            $errors = $validator->getErrors();
+            // 如果有自定义消息，覆盖默认消息
+            if (!empty($messages)) {
+                foreach ($messages as $field => $message) {
+                    if (isset($errors[$field])) {
+                        $errors[$field] = $message;
                     }
                 }
             }
-        }
-        
-        if (!empty($errors)) {
             throw new \InvalidArgumentException(implode(', ', $errors));
         }
-        
+
         return $this->onlyParams(array_keys($rules));
     }
     
@@ -297,14 +273,13 @@ abstract class BaseController
     
     /**
      * 资源清理
-     * Resource cleanup
      */
     public function __destruct()
     {
-        // 强制垃圾回收（特别针对CLI模式）
-        // Force garbage collection (especially for CLI mode)
-        if ($this->runtimeMode->isCli() || $this->runtimeMode->isShell()) {
-            gc_collect_cycles();
+        // CLI/Shell 模式下仅清理请求参数，不强制 GC
+        // gc_collect_cycles() 开销大，应由业务层按需调用
+        if (($this->runtimeMode->isCli() || $this->runtimeMode->isShell()) && $this->request) {
+            $this->request->setParams([]);
         }
     }
 }

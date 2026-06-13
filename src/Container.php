@@ -4,30 +4,49 @@ namespace PHPFrame;
 
 class Container
 {
-    private static $instance = null;
     protected $services = [];
     protected $config = [];
     protected $instances = [];
 
+    /**
+     * 原型服务ID列表（每次解析返回新实例）
+     */
+    protected $prototypes = [];
+
+    /**
+     * 当前正在解析的服务ID栈（用于循环依赖检测）
+     */
+    protected array $resolutionStack = [];
+
     public function __construct(array $config = [])
     {
         $this->config = $config;
-
-        $this->registerCoreServices();
-
     }
 
-    public static function getInstance(): self
+    /**
+     * 获取容器实例（委托给Application）
+     */
+    public static function getInstance(): static
     {
-        if (self::$instance === null) {
-            self::$instance = new self();
+        if (Application::hasInstance()) {
+            return Application::getInstance();
         }
-        return self::$instance;
+
+        // 兜底：如果Application未初始化，创建一个独立Container
+        // 这种情况理论上不应发生，仅为向后兼容
+        static $fallback = null;
+        if ($fallback === null) {
+            $fallback = new static();
+        }
+        return $fallback;
     }
 
+    /**
+     * 快速解析服务（静态快捷方式）
+     */
     public static function make($id)
     {
-        return self::getInstance()->get($id);
+        return static::getInstance()->get($id);
     }
 
     public function set($id, $service)
@@ -37,29 +56,61 @@ class Container
 
     public function get($id)
     {
-        if (isset($this->instances[$id])) {
+        // 循环依赖检测
+        if (in_array($id, $this->resolutionStack, true)) {
+            $chain = implode(' → ', $this->resolutionStack) . ' → ' . $id;
+            throw new \Exception("Circular dependency detected: {$chain}");
+        }
+
+        // 非原型服务：优先返回已缓存实例
+        if (!isset($this->prototypes[$id]) && isset($this->instances[$id])) {
             return $this->instances[$id];
         }
 
         if (isset($this->services[$id])) {
-            if (is_callable($this->services[$id])) {
-                $instance = $this->services[$id]($this);
-                $this->instances[$id] = $instance;
-                return $instance;
+            $this->resolutionStack[] = $id;
+            try {
+                if (is_callable($this->services[$id])) {
+                    $instance = $this->services[$id]($this);
+                } else {
+                    $instance = $this->services[$id];
+                }
+            } finally {
+                array_pop($this->resolutionStack);
             }
-            $this->instances[$id] = $this->services[$id];
-            return $this->instances[$id];
+
+            // 原型服务不缓存实例
+            if (!isset($this->prototypes[$id])) {
+                $this->instances[$id] = $instance;
+            }
+            return $instance;
         }
 
         if (class_exists($id)) {
-            $instance = $this->autoRegister($id);
-            $this->instances[$id] = $instance;
+            $this->resolutionStack[] = $id;
+            try {
+                $instance = $this->autoRegister($id);
+            } finally {
+                array_pop($this->resolutionStack);
+            }
+
+            if (!isset($this->prototypes[$id])) {
+                $this->instances[$id] = $instance;
+            }
             return $instance;
         }
 
         if (interface_exists($id)) {
-            $instance = $this->resolveInterface($id);
-            $this->instances[$id] = $instance;
+            $this->resolutionStack[] = $id;
+            try {
+                $instance = $this->resolveInterface($id);
+            } finally {
+                array_pop($this->resolutionStack);
+            }
+
+            if (!isset($this->prototypes[$id])) {
+                $this->instances[$id] = $instance;
+            }
             return $instance;
         }
 
@@ -68,33 +119,43 @@ class Container
 
     public function has($id)
     {
-        return isset($this->services[$id]) || isset($this->instances[$id]) || class_exists($id);
+        return isset($this->services[$id]) || isset($this->instances[$id]);
     }
 
     /**
-     * 注册核心服务（db、cache、config、exception）
+     * 注册原型服务（每次解析返回新实例）
+     */
+    public function prototype($id, callable $factory)
+    {
+        $this->services[$id] = $factory;
+        $this->prototypes[$id] = true;
+    }
+
+    /**
+     * 移除已注册的服务或实例
+     */
+    public function unset($id)
+    {
+        unset($this->services[$id], $this->instances[$id], $this->prototypes[$id]);
+    }
+
+    /**
+     * 注册核心服务
+     * 仅由Application::initialize()调用一次
      */
     protected function registerCoreServices()
     {
-        // echo "x";
-        // 配置服务
+        // 配置服务 — 自动扫描 config/ 目录
         $this->services['config'] = function () {
-            $appConfig = $this->loadConfig(CONFIG_PATH . '/app.php');
-            return new ConfigManager(array_merge([
-                'app' => $appConfig,
-                'cache' => $this->loadConfig(CONFIG_PATH . '/cache.php'),
-                'database' => $this->loadConfig(CONFIG_PATH . '/database.php'),
-                'exception' => $this->loadConfig(CONFIG_PATH . '/exception.php'),
-            ], $appConfig['config_map'] ?? []));
+            $environment = $_ENV['APP_ENV'] ?? 'production';
+            return new ConfigManager([], CONFIG_PATH, $environment);
         };
 
         // 路由服务
         $this->services['router'] = function () {
             return \FastRoute\simpleDispatcher(function (\FastRoute\RouteCollector $r) {
-                // 设置RouteCollector实例，以便路由文件可以使用Route::get()等方法
                 Facades\Route::setCollector($r);
 
-                // 加载所有路由文件
                 $routeFiles = glob(ROUTES_PATH . '/*.php');
                 foreach ($routeFiles as $routeFile) {
                     require $routeFile;
@@ -116,14 +177,19 @@ class Container
 
             $dbManager = new Database\DatabaseManager($capsule);
 
-            // 根据APP_MODE优化连接策略
             $appMode = defined('APP_MODE') ? APP_MODE : 'fpm';
-            
-            // CLI模式总是使用持久连接，其他模式根据环境变量决定
             $usePersistent = ($appMode === 'cli') || ($_ENV['DB_PERSISTENT'] ?? 'false') === 'true';
 
             if ($usePersistent) {
                 $dbManager->enablePersistentConnections(true);
+            }
+
+            // 自动注入 CacheManager，使查询缓存可跨进程/跨请求共享
+            try {
+                $cacheManager = $c->get('cache');
+                $dbManager->setCacheManager($cacheManager);
+            } catch (\Exception $e) {
+                // CacheManager 不可用时降级到进程内数组缓存
             }
 
             return $dbManager;
@@ -172,7 +238,8 @@ class Container
 
         // 日志服务
         $this->services['logger'] = function () {
-            $logConfig = $this->loadConfig(CONFIG_PATH . '/log.php');
+            $logFile = CONFIG_PATH . '/log.php';
+            $logConfig = file_exists($logFile) ? require $logFile : [];
             return Logger::getInstance($logConfig);
         };
 
@@ -185,12 +252,9 @@ class Container
                 'auto_reload' => true,
             ]);
 
-            // 添加全局变量
             $twig->addGlobal('current_uri', function () {
-                // 获取当前URI，兼容FPM和CLI模式
                 if (isset($_SERVER['REQUEST_URI'])) {
                     $uri = $_SERVER['REQUEST_URI'];
-                    // 去除查询字符串
                     if (false !== $pos = strpos($uri, '?')) {
                         $uri = substr($uri, 0, $pos);
                     }
@@ -205,120 +269,59 @@ class Container
         // 哈希服务
         $this->services['hash'] = new \Illuminate\Hashing\BcryptHasher();
 
-        // 数据库管理器服务
-        $this->services['PHPFrame\Database\DatabaseManager'] = function ($c) {
-            $capsule = $this->get('capsule');
-            return new Database\DatabaseManager($capsule);
-        };
-
-        // 缓存管理器服务
-        $this->services['PHPFrame\CacheManager'] = function ($c) {
-            return $c->get('cache');
-        };
-
         // 请求服务
         $this->services['request'] = function () {
             static $instance = null;
             if ($instance === null) {
-                $instance = new Request();
+                $instance = Request::createFromGlobals();
             }
             return $instance;
         };
 
-        // 应用服务（用于App门面）
-        $this->services['app'] = function ($c) {
-            return new class($c) {
-                private $container;
 
-                public function __construct($container)
-                {
-                    $this->container = $container;
-                }
-
-                public function env()
-                {
-                    return $_ENV['APP_ENV'] ?? 'prod';
-                }
-
-                public function isDebug()
-                {
-                    return ($_ENV['APP_DEBUG'] ?? 'false') === 'true';
-                }
-
-                public function getContainer()
-                {
-                    return $this->container;
-                }
-            };
-        };
     }
 
     private function autoRegister($className)
     {
-        if (class_exists($className)) {
-            $reflection = new \ReflectionClass($className);
-
-            if ($reflection->isAbstract() || $reflection->isInterface()) {
-                if ($reflection->isInterface()) {
-                    return $this->resolveInterface($className);
-                }
-                throw new \Exception("Cannot instantiate abstract class or interface: {$className}");
-            }
-
-            $constructor = $reflection->getConstructor();
-            $dependencies = [];
-
-            if ($constructor) {
-                foreach ($constructor->getParameters() as $parameter) {
-                    $paramType = $parameter->getType();
-
-                    if ($paramType && !$paramType->isBuiltin()) {
-                        $dependencies[] = $this->get($paramType->getName());
-                    } elseif ($parameter->isDefaultValueAvailable()) {
-                        $dependencies[] = $parameter->getDefaultValue();
-                    } else {
-                        throw new \Exception("Cannot resolve parameter '{$parameter->getName()}' for class {$className}");
-                    }
-                }
-            }
-
-            return $reflection->newInstanceArgs($dependencies);
-        }
-
+        // 先尝试从配置注册
         $serviceConfig = $this->config['services'][$className] ?? null;
         if ($serviceConfig) {
             return $this->registerFromConfig($className, $serviceConfig);
         }
 
-        if (strpos($className, 'App\\') === 0 || strpos($className, 'PHPFrame\\') === 0) {
-            $reflection = new \ReflectionClass($className);
-
-            if ($reflection->isAbstract() || $reflection->isInterface()) {
-                if ($reflection->isInterface()) {
-                    return $this->resolveInterface($className);
-                }
-                throw new \Exception("Cannot instantiate abstract class or interface: {$className}");
-            }
-
-            $constructor = $reflection->getConstructor();
-            $dependencies = [];
-
-            if ($constructor) {
-                foreach ($constructor->getParameters() as $parameter) {
-                    $paramType = $parameter->getType();
-
-                    if ($paramType && !$paramType->isBuiltin()) {
-                        $dependencies[] = $this->get($paramType->getName());
-                    } elseif ($parameter->isDefaultValueAvailable()) {
-                        $dependencies[] = $parameter->getDefaultValue();
-                    }
-                }
-            }
-
-            return $reflection->newInstanceArgs($dependencies);
+        // 自动解析类
+        if (!class_exists($className)) {
+            throw new \Exception("Service not found and cannot auto-register: {$className}");
         }
 
-        throw new \Exception("Service not found and cannot auto-register: {$className}");
+        $reflection = new \ReflectionClass($className);
+
+        if ($reflection->isAbstract()) {
+            throw new \Exception("Cannot instantiate abstract class: {$className}");
+        }
+
+        if ($reflection->isInterface()) {
+            return $this->resolveInterface($className);
+        }
+
+        $constructor = $reflection->getConstructor();
+        $dependencies = [];
+
+        if ($constructor) {
+            foreach ($constructor->getParameters() as $parameter) {
+                $paramType = $parameter->getType();
+
+                if ($paramType && !$paramType->isBuiltin()) {
+                    $dependencies[] = $this->get($paramType->getName());
+                } elseif ($parameter->isDefaultValueAvailable()) {
+                    $dependencies[] = $parameter->getDefaultValue();
+                } else {
+                    throw new \Exception("Cannot resolve parameter '{$parameter->getName()}' for class {$className}");
+                }
+            }
+        }
+
+        return $reflection->newInstanceArgs($dependencies);
     }
 
     private function registerFromConfig($id, $config)
@@ -372,12 +375,4 @@ class Container
         throw new \Exception("Cannot resolve interface: {$interfaceName}");
     }
 
-    private function loadConfig($configPath)
-    {
-        if (!file_exists($configPath)) {
-            return [];
-        }
-
-        return require $configPath;
-    }
 }

@@ -19,7 +19,7 @@ class ReactiveRequestHandler
     protected $dispatcher;
     
     /**
-     * @var \DI\Container
+     * @var \PHPFrame\Container
      */
     protected $container;
     
@@ -32,13 +32,14 @@ class ReactiveRequestHandler
      * 构造函数
      *
      * @param Dispatcher $dispatcher FastRoute调度器
-     * @param \DI\Container $container 依赖注入容器
+     * @param \PHPFrame\Container $container 依赖注入容器
+     * @param RouteManager|null $routeManager 路由管理器（复用已有实例以保留中间件注册）
      */
-    public function __construct(Dispatcher $dispatcher, $container)
+    public function __construct(Dispatcher $dispatcher, $container, ?RouteManager $routeManager = null)
     {
         $this->dispatcher = $dispatcher;
         $this->container = $container;
-        $this->routeManager = new RouteManager($dispatcher, $container);
+        $this->routeManager = $routeManager ?? new RouteManager($dispatcher, $container);
     }
     
     /**
@@ -65,7 +66,7 @@ class ReactiveRequestHandler
     /**
      * 获取依赖注入容器
      *
-     * @return \DI\Container
+     * @return \PHPFrame\Container
      */
     public function getContainer()
     {

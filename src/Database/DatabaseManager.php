@@ -6,13 +6,11 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use PDO;
+use PHPFrame\CacheManager;
 
 /**
  * 数据库管理器
- * Database Manager
- * 
  * 统一管理数据库连接、查询缓存和事务
- * Unified management of database connections, query caching, and transactions
  */
 class DatabaseManager
 {
@@ -20,6 +18,9 @@ class DatabaseManager
 
     protected $connections = [];
 
+    /**
+     * 进程内查询缓存（降级方案，CacheManager不可用时使用）
+     */
     protected $queryCache = [];
 
     protected $cachePrefix = 'db_query:';
@@ -40,9 +41,31 @@ class DatabaseManager
 
     protected $runtimeMode = 'fpm';
 
+    /**
+     * CacheManager 实例（可选，用于跨进程/跨请求共享缓存）
+     */
+    protected ?CacheManager $cacheManager = null;
+
+    /**
+     * 是否使用 CacheManager（有则用，无则降级到进程内数组）
+     */
+    protected bool $useExternalCache = false;
+
     public function __construct(Capsule $capsule)
     {
         $this->capsule = $capsule;
+    }
+
+    /**
+     * 设置 CacheManager 实例
+     * 调用此方法后，查询缓存将委托给 CacheManager（Redis/File等）
+     * 不调用则降级到进程内数组缓存（行为与旧版完全一致）
+     */
+    public function setCacheManager(CacheManager $cacheManager): self
+    {
+        $this->cacheManager = $cacheManager;
+        $this->useExternalCache = true;
+        return $this;
     }
 
     public function setRuntimeMode(string $mode): self
@@ -227,6 +250,8 @@ class DatabaseManager
 
     public function tableExists(string $tableName): bool
     {
+        $this->validateTableName($tableName);
+
         $connection = $this->connection();
         $driverName = $connection->getDriverName();
 
@@ -267,6 +292,8 @@ class DatabaseManager
 
     public function getTableInfo(string $tableName): array
     {
+        $this->validateTableName($tableName);
+
         $connection = $this->connection();
         $driverName = $connection->getDriverName();
 
@@ -279,7 +306,7 @@ class DatabaseManager
         $result = [];
         switch ($driverName) {
             case 'mysql':
-                $result = $connection->select("DESCRIBE {$tableName}");
+                $result = $connection->select("DESCRIBE `{$tableName}`");
                 break;
             case 'pgsql':
                 $result = $connection->select("
@@ -289,7 +316,7 @@ class DatabaseManager
                 ", [$tableName]);
                 break;
             case 'sqlite':
-                $result = $connection->select("PRAGMA table_info({$tableName})");
+                $result = $connection->select("PRAGMA table_info(`{$tableName}`)");
                 break;
         }
 
@@ -385,6 +412,8 @@ class DatabaseManager
         return $this->connection()->table($table);
     }
 
+    // ─── 缓存方法 ───
+
     protected function getCacheKey(string $sql, array $bindings): string
     {
         return $this->cachePrefix . md5($sql . json_encode($bindings));
@@ -399,8 +428,21 @@ class DatabaseManager
             && strpos($sql, 'DELETE') === false;
     }
 
+    /**
+     * 从缓存获取数据
+     * 优先使用 CacheManager（Redis/File），降级到进程内数组
+     */
     protected function getFromCache(string $key)
     {
+        if ($this->useExternalCache) {
+            try {
+                return $this->cacheManager->get($key);
+            } catch (\Exception $e) {
+                // CacheManager 异常时降级到进程内缓存
+            }
+        }
+
+        // 降级：进程内数组缓存（与旧版行为一致）
         if (!isset($this->queryCache[$key])) {
             return null;
         }
@@ -414,9 +456,24 @@ class DatabaseManager
         return $cached['data'];
     }
 
+    /**
+     * 保存数据到缓存
+     * 优先使用 CacheManager（Redis/File），降级到进程内数组
+     */
     protected function saveToCache(string $key, $data, int $ttl = null): void
     {
         $ttl = $ttl ?? $this->cacheTTL;
+
+        if ($this->useExternalCache) {
+            try {
+                $this->cacheManager->set($key, $data, $ttl);
+                return;
+            } catch (\Exception $e) {
+                // CacheManager 异常时降级到进程内缓存
+            }
+        }
+
+        // 降级：进程内数组缓存（与旧版行为一致）
         $this->queryCache[$key] = [
             'data' => $data,
             'expires' => time() + $ttl
@@ -427,8 +484,21 @@ class DatabaseManager
         }
     }
 
+    /**
+     * 清除查询缓存
+     * CacheManager 模式下按前缀清除，进程内模式直接清空数组
+     */
     protected function clearQueryCache(): void
     {
+        if ($this->useExternalCache) {
+            try {
+                $this->cacheManager->deleteByPattern($this->cachePrefix . '*');
+                return;
+            } catch (\Exception $e) {
+                // 降级
+            }
+        }
+
         $this->queryCache = [];
     }
 
@@ -442,10 +512,44 @@ class DatabaseManager
         }
     }
 
+    // ─── 安全方法 ───
+
+    /**
+     * 校验表名，防止SQL注入
+     * 仅允许字母、数字、下划线、点号（schema.table格式）
+     */
+    protected function validateTableName(string $tableName): void
+    {
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_.]*$/', $tableName)) {
+            throw new \InvalidArgumentException("Invalid table name: {$tableName}");
+        }
+    }
+
     protected function logQuery(string $sql, array $bindings, float $executionTime, ?string $error = null): void
     {
         $this->stats['queries']++;
         $this->stats['execution_time'] += $executionTime;
+
+        if ($this->loggingEnabled) {
+            try {
+                $logger = app('logger');
+                if ($logger) {
+                    $context = [
+                        'sql' => $sql,
+                        'bindings' => $bindings,
+                        'time_ms' => round($executionTime * 1000, 2),
+                    ];
+                    if ($error) {
+                        $context['error'] = $error;
+                        $logger->error('Query failed', $context);
+                    } else {
+                        $logger->debug('Query executed', $context);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // 日志记录失败时静默处理
+            }
+        }
     }
 
     public function enableQueryLog(): void

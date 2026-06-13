@@ -10,21 +10,26 @@ namespace PHPFrame;
  */
 abstract class Facade
 {
-    protected static $context = [];
+    /**
+     * 每个门面类独立的上下文存储
+     * key 为门面类名，value 为上下文数组
+     */
+    private static array $contextStore = [];
 
     public static function setContext(array $context): void
     {
-        static::$context = array_merge(static::$context, $context);
+        $key = static::class;
+        self::$contextStore[$key] = array_merge(self::$contextStore[$key] ?? [], $context);
     }
 
     public static function getContext(): array
     {
-        return static::$context;
+        return self::$contextStore[static::class] ?? [];
     }
 
     public static function clearContext(): void
     {
-        static::$context = [];
+        unset(self::$contextStore[static::class]);
     }
 
     /**
@@ -83,13 +88,14 @@ abstract class Facade
             return $args;
         }
 
+        $context = static::getContext();
         $lastArg = $args[count($args) - 1] ?? null;
         if ($lastArg === null) {
-            $args[] = static::$context;
+            $args[] = $context;
         } elseif (is_array($lastArg)) {
-            $args[count($args) - 1] = array_merge(static::$context, $lastArg);
+            $args[count($args) - 1] = array_merge($context, $lastArg);
         } else {
-            $args[] = static::$context;
+            $args[] = $context;
         }
 
         return $args;

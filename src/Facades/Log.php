@@ -24,6 +24,6 @@ class Log extends Facade
 
     public static function getLogger()
     {
-        return static::getFacadeRoot();
+        return static::resolveFacadeInstance(static::getFacadeAccessor());
     }
 }

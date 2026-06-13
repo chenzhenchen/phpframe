@@ -175,12 +175,13 @@ class CacheManager
         // 只有Redis驱动支持模式删除
         if (config('cache.default') === 'redis') {
             try {
+                // 通过 Store 获取前缀，确保与 get/set/delete 键格式一致
+                $store = $this->cache->getStore();
+                $storePrefix = method_exists($store, 'getPrefix') ? $store->getPrefix() : '';
+                $fullPattern = $storePrefix . $pattern;
+
                 // 获取Redis连接实例
                 $redis = app('redis.connection');
-
-                // 构建完整的键模式
-                $prefix = config('cache.prefix', '');
-                $fullPattern = $prefix ? "{$prefix}:{$pattern}" : $pattern;
 
                 // 使用scan命令避免阻塞（生产环境推荐）
                 $iterator = null;
@@ -193,9 +194,15 @@ class CacheManager
                     }
                 } while ($iterator > 0);
 
-                // 删除匹配的键
+                // 删除匹配的键（移除 Store 前缀后使用 delete，保持键格式一致）
                 if (!empty($keys)) {
-                    $deleted = $this->deleteMultiple($keys);
+                    $prefixLen = strlen($storePrefix);
+                    $unprefixedKeys = [];
+                    foreach ($keys as $fullKey) {
+                        $unprefixedKeys[] = substr($fullKey, $prefixLen);
+                    }
+                    $deleted = count($unprefixedKeys);
+                    $this->deleteMultiple($unprefixedKeys);
                 }
 
             } catch (\Exception $e) {
@@ -229,7 +236,6 @@ class CacheManager
      * @return mixed
      */
     public function pull(string $key, $default = null): mixed   {
-        $key = $this->getKey($key);
         $value = $this->get($key, $default);
         if ($value !== $default) {
             $this->delete($key);
@@ -246,7 +252,7 @@ class CacheManager
      */
     public function forget(string $key): bool
     {
-        return $this->delete($this->getKey($key));
+        return $this->delete($key);
     }
 
     /**
@@ -271,7 +277,7 @@ class CacheManager
     {
         $result = true;
         foreach ($keys as $key) {
-            if (!$this->delete($this->getKey($key))) {
+            if (!$this->delete($key)) {
                 $result = false;
             }
         }
@@ -323,6 +329,6 @@ class CacheManager
      */
     public function put(string $key, $value, $ttl = null): bool
     {
-        return $this->set($this->getKey($key), $value, $ttl ?? 3600);
+        return $this->set($key, $value, $ttl ?? 3600);
     }
 }

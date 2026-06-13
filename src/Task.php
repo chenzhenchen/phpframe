@@ -4,6 +4,7 @@ namespace PHPFrame;
 
 use React\EventLoop\Loop;
 use React\Promise\Promise as ReactPromise;
+use React\Promise\PromiseInterface;
 use React\ChildProcess\Process;
 /**
  * 任务类
@@ -159,6 +160,7 @@ class Task
         $completed = false;
         $timedOut = false;
         $fibers = [];
+        $cancelled = [];
 
         // 启动所有fiber
         foreach ($callbacks as $callback) {
@@ -170,7 +172,7 @@ class Task
                         $completed = true;
                     }
                 } catch (\Throwable $e) {
-                    if (!$completed) {
+                    if (!$completed && $firstError === null) {
                         $firstError = $e;
                     }
                 }
@@ -200,11 +202,30 @@ class Task
             \usleep(1000);
         }
 
+        // 取消仍在运行的 Fiber，避免资源浪费
+        foreach ($fibers as $fiber) {
+            if ($fiber->isRunning() || $fiber->isSuspended()) {
+                try {
+                    // 从 sleeping fibers 中移除
+                    $id = \spl_object_id($fiber);
+                    unset(self::$sleepingFibers[$id], self::$sleepWakeTimes[$id]);
+                    // 尝试恢复并抛出取消异常
+                    if ($fiber->isSuspended()) {
+                        $fiber->resume(new \RuntimeException('Race cancelled'));
+                    }
+                } catch (\FiberError | \Throwable $e) {
+                    // 忽略取消错误
+                }
+                $cancelled[] = true;
+            }
+        }
+
         return [
             'first_successful' => $firstResult,
             'first_error' => $firstError,
             'completed' => $completed,
-            'timed_out' => $timedOut
+            'timed_out' => $timedOut,
+            'cancelled_count' => count($cancelled),
         ];
     }
 
@@ -447,9 +468,9 @@ class Task
      * 异步非阻塞并发执行多个任务
      * 
      * @param array $callbacks 回调函数数组
-     * @return ReactPromise 返回包含所有结果的Promise
+     * @return PromiseInterface 返回包含所有结果的Promise
      */
-    public static function asyncAll(array $callbacks): ReactPromise
+    public static function asyncAll(array $callbacks): PromiseInterface
     {
         $promises = [];
         foreach ($callbacks as $callback) {
@@ -463,9 +484,9 @@ class Task
      * 异步非阻塞竞速执行（第一个完成的任务返回）
      * 
      * @param array $callbacks 回调函数数组
-     * @return ReactPromise 返回第一个完成的任务结果
+     * @return PromiseInterface 返回第一个完成的任务结果
      */
-    public static function asyncRace(array $callbacks): ReactPromise
+    public static function asyncRace(array $callbacks): PromiseInterface
     {
         $promises = [];
         foreach ($callbacks as $callback) {

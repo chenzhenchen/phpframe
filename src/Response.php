@@ -2,8 +2,6 @@
 
 namespace PHPFrame;
 
-use PHPFrame\Runtime;
-
 /**
  * Response Handler Class
  * Unified response output handling for FPM, CLI, and Shell modes
@@ -63,7 +61,7 @@ class Response
     
     /**
      * 重定向（仅FPM模式）
-     * Redirect (FPM mode only)
+     * 不再直接 exit，由调用方决定是否终止
      */
     public static function redirect(string $url, int $statusCode = 302): void
     {
@@ -73,7 +71,6 @@ class Response
         
         http_response_code($statusCode);
         header("Location: {$url}");
-        exit;
     }
     
     /**

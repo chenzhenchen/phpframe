@@ -212,31 +212,34 @@ abstract class BaseShell
     
     /**
      * 记录日志
-     * Log message
+     * 通过框架 Logger 统一记录，保持日志格式和轮转策略一致
      */
     protected function log(string $message, string $level = 'info'): void
     {
-        $timestamp = date('Y-m-d H:i:s');
-        $logMessage = "[{$timestamp}] [{$level}] {$message}" . PHP_EOL;
-        
         // 输出到控制台
-        // Output to console
-        $this->output($logMessage, $level);
-        
-        // 写入日志文件
-        // Write to log file
-        $logFile = runtime_path('logs/shell.log');
-        file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+        $this->output($message, $level);
+
+        // 通过框架 Logger 写入日志文件
+        try {
+            $logger = app('logger');
+            $logger->log($level, "[shell] {$message}");
+        } catch (\Exception $e) {
+            // Logger 不可用时降级到文件写入
+            $timestamp = date('Y-m-d H:i:s');
+            $logMessage = "[{$timestamp}] [{$level}] {$message}" . PHP_EOL;
+            $logFile = runtime_path('logs/shell.log');
+            @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+        }
     }
     
     /**
      * 资源清理
-     * Resource cleanup
      */
     public function __destruct()
     {
-        // 强制垃圾回收
-        // Force garbage collection
-        gc_collect_cycles();
+        // 清理请求参数，不强制 GC
+        if ($this->request) {
+            $this->request->setParams([]);
+        }
     }
 }

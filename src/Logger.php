@@ -14,18 +14,28 @@ class Logger
     public const WARNING = 'warning';
     public const ERROR = 'error';
 
-    protected static $instance = null;
+    protected static ?Logger $instance = null;
 
-    protected $logPath;
-    protected $filename;
-    protected $dateFormat;
-    protected $channel;
-    protected $monolog;
-    protected $requestStartTime;
-    protected $requestData = [];
-    protected $manualLogs = [];
-    protected $cachedLogPath = null;
-    protected $cachedDate = null;
+    protected string $logPath;
+    protected string $filename;
+    protected string $dateFormat;
+    protected string $channel;
+
+    /**
+     * Monolog 实例（用于 Log::info/error 等手动日志）
+     */
+    protected MonologLogger $monolog;
+
+    /**
+     * 请求日志专用的 Monolog 实例（管道分隔格式，兼容原有 writeLog 格式）
+     */
+    protected MonologLogger $requestMonolog;
+
+    protected ?float $requestStartTime = null;
+    protected array $requestData = [];
+
+    protected ?string $cachedLogPath = null;
+    protected ?string $cachedDate = null;
 
     public function __construct(array $config = [])
     {
@@ -41,7 +51,7 @@ class Logger
         $this->initMonolog();
     }
 
-    public static function getInstance(array $config = [])
+    public static function getInstance(array $config = []): static
     {
         if (self::$instance === null) {
             self::$instance = new self($config);
@@ -49,17 +59,33 @@ class Logger
         return self::$instance;
     }
 
-    protected function initMonolog()
+    /**
+     * 初始化 Monolog
+     * - monolog: 用于 Log::info/error 等手动日志（标准格式，立即写入）
+     * - requestMonolog: 用于 RouteManager 的请求日志（管道分隔格式）
+     */
+    protected function initMonolog(): void
     {
-        $this->monolog = new MonologLogger($this->channel);
-
         $logFile = $this->getLogFilePath();
 
+        // 手动日志 Monolog（标准 LineFormatter）
+        $this->monolog = new MonologLogger($this->channel);
         $handler = new StreamHandler($logFile, MonologLogger::DEBUG);
-        $formatter = new LineFormatter(null, $this->dateFormat, false, true);
+        $formatter = new LineFormatter(
+            "[%datetime%] %channel%.%level_name%: %message% %context%\n",
+            'Y-m-d H:i:s',
+            false,
+            true
+        );
         $handler->setFormatter($formatter);
-
         $this->monolog->pushHandler($handler);
+
+        // 请求日志 Monolog（管道分隔格式，兼容原有 writeLog 格式）
+        $this->requestMonolog = new MonologLogger($this->channel . '.request');
+        $requestHandler = new StreamHandler($logFile, MonologLogger::DEBUG);
+        $requestFormatter = new LineFormatter('%message%', 'Y-m-d H:i:s', false, true);
+        $requestHandler->setFormatter($requestFormatter);
+        $this->requestMonolog->pushHandler($requestHandler);
     }
 
     public function getLogFilePath(): string
@@ -73,7 +99,40 @@ class Logger
         $this->cachedDate = $currentDate;
         $this->cachedLogPath = $this->logPath . DIRECTORY_SEPARATOR . $this->filename . '_' . $currentDate . '.log';
 
+        // 日期变化时更新 Monolog handler 的日志文件路径
+        $this->rotateHandlers();
+
         return $this->cachedLogPath;
+    }
+
+    /**
+     * 日期变化时更新 StreamHandler 的目标文件
+     */
+    protected function rotateHandlers(): void
+    {
+        if ($this->cachedLogPath === null) {
+            return;
+        }
+
+        foreach ([$this->monolog, $this->requestMonolog] as $logger) {
+            if ($logger === null) {
+                continue;
+            }
+            foreach ($logger->getHandlers() as $handler) {
+                if ($handler instanceof StreamHandler) {
+                    // Monolog StreamHandler 的 $url 属性存储日志文件路径
+                    // 使用反射更新，因为 setUrl() 方法在旧版本中可能不存在
+                    try {
+                        $ref = new \ReflectionProperty($handler, 'url');
+                        $ref->setAccessible(true);
+                        $ref->setValue($handler, $this->cachedLogPath);
+                    } catch (\ReflectionException $e) {
+                        // 降级：关闭旧 handler 并创建新 handler
+                        $handler->close();
+                    }
+                }
+            }
+        }
     }
 
     public function setRequestData(array $data): void
@@ -91,46 +150,85 @@ class Logger
         return $this->requestData;
     }
 
+    // ─── 手动日志方法（Log::info / Log::error 等，立即写入） ───
+
     public function info(string $message, array $context = []): void
     {
-        $this->addManualLog('info', $message, $context);
+        $this->monolog->info($message, $context);
     }
 
     public function error(string $message, array $context = []): void
     {
-        $this->addManualLog('error', $message, $context);
+        $this->monolog->error($message, $context);
     }
 
     public function warning(string $message, array $context = []): void
     {
-        $this->addManualLog('warning', $message, $context);
+        $this->monolog->warning($message, $context);
     }
 
     public function debug(string $message, array $context = []): void
     {
-        $this->addManualLog('debug', $message, $context);
+        $this->monolog->debug($message, $context);
     }
 
     public function notice(string $message, array $context = []): void
     {
-        $this->addManualLog('notice', $message, $context);
+        $this->monolog->notice($message, $context);
     }
 
-    private function addManualLog(string $level, string $message, array $context = []): void
+    public function log($level, $message, array $context = []): void
     {
-        $this->manualLogs[] = [
-            'level' => $level,
-            'message' => $message,
-            'context' => $context,
-            'time' => date('Y-m-d H:i:s'),
+        $levelMap = [
+            'debug' => MonologLogger::DEBUG,
+            'info' => MonologLogger::INFO,
+            'notice' => MonologLogger::NOTICE,
+            'warning' => MonologLogger::WARNING,
+            'error' => MonologLogger::ERROR,
         ];
+
+        $monologLevel = $levelMap[strtolower($level)] ?? MonologLogger::INFO;
+        $this->monolog->log($monologLevel, $message, $context);
     }
 
-    protected function buildLogLine(string $time, string $level, string $clientIp, string $serverIp,
-                                    string $elapsedTime, int $statusCode, string $method, string $uri, string $requestData,
-                                    string $userAgent, string $content): string
-    {
+    // ─── 请求日志方法（供 RouteManager::autoLog 调用） ───
 
+    /**
+     * 写入请求日志（管道分隔格式，兼容原有格式）
+     * RouteManager 的 autoLog() 调用此方法
+     */
+    public function writeLog(
+        string $time,
+        string $level,
+        string $clientIp,
+        string $serverIp,
+        string $elapsedTime,
+        int    $statusCode,
+        string $method,
+        string $uri,
+        string $requestData,
+        string $userAgent,
+        string $content
+    ): void
+    {
+        $logLine = $this->buildLogLine(
+            $time, $level, $clientIp, $serverIp,
+            $elapsedTime, $statusCode, $method, $uri,
+            $requestData, $userAgent, $content
+        );
+
+        $this->requestMonolog->info($logLine);
+    }
+
+    /**
+     * 构建管道分隔的日志行
+     */
+    protected function buildLogLine(
+        string $time, string $level, string $clientIp, string $serverIp,
+        string $elapsedTime, int $statusCode, string $method, string $uri,
+        string $requestData, string $userAgent, string $content
+    ): string
+    {
         return implode('|', [
             $time,
             $level,
@@ -146,11 +244,9 @@ class Logger
         ]);
     }
 
-    protected function doWriteLog(string $logLine): void
-    {
-        @file_put_contents($this->getLogFilePath(), $logLine . PHP_EOL, FILE_APPEND | LOCK_EX);
-    }
-
+    /**
+     * 准备请求数据（兼容旧版，供子类覆写）
+     */
     protected function prepareRequestData(): array
     {
         if (empty($this->requestData)) {
@@ -170,67 +266,15 @@ class Logger
         return $data;
     }
 
+    // ─── Monolog 访问器 ───
+
     public function getMonolog(): MonologLogger
     {
         return $this->monolog;
     }
 
-    public function log($level, $message, array $context = []): void
+    public function getRequestMonolog(): MonologLogger
     {
-        $clientIp = $context['client_ip'] ?? '';
-        $serverIp = $context['server_ip'] ?? '';
-        $uri = $context['uri'] ?? '';
-        $userAgent = $context['user_agent'] ?? '';
-        $method = strtoupper($context['method'] ?? $this->requestData['method'] ?? Runtime::detect());
-
-        $requestData = $this->prepareRequestData();
-        $requestDataStr = !empty($requestData) ? json_encode($requestData, JSON_UNESCAPED_UNICODE) : '';
-
-        $contextStr = !empty($context) ? ' ' . json_encode($context, JSON_UNESCAPED_UNICODE) : '';
-        $logContent = $message . $contextStr;
-        $this->writeLog(
-            date('Y-m-d H:i:s'),
-            $level,
-            $clientIp,
-            $serverIp,
-            0,
-            0,
-            $method,
-            $uri,
-            $requestDataStr,
-            $userAgent,
-            $logContent
-        );
-    }
-
-    public function writeLog(string $time, string $level, string $clientIp, string $serverIp,
-                             string $elapsedTime, int $statusCode, string $method, string $uri, string $requestData,
-                             string $userAgent, string $content): void
-    {
-        $logLine = [];
-
-        if (!empty($this->manualLogs)) {
-            foreach ($this->manualLogs as $log) {
-                $logContent = $log['message'] . json_encode($log['context'], JSON_UNESCAPED_UNICODE);
-                $logLine[] = $this->buildLogLine($log['time'], $log['level'], $clientIp, $serverIp, 0, 0, "", $uri, "", "", $logContent);
-            }
-            $this->manualLogs = [];
-        }
-
-        $logLine[] = $this->buildLogLine(
-            $time,
-            $level,
-            $clientIp,
-            $serverIp,
-            $elapsedTime,
-            $statusCode,
-            $method,
-            $uri,
-            $requestData,
-            $userAgent,
-            $content
-        );
-
-        $this->doWriteLog(implode("\n", $logLine));
+        return $this->requestMonolog;
     }
 }
