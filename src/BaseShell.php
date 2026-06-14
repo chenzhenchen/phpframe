@@ -20,10 +20,9 @@ abstract class BaseShell
     protected $request;
     
     /**
-     * @var Runtime 运行模式检测器
-     * Runtime mode detector
+     * @var string 运行模式缓存
      */
-    protected $runtimeMode;
+    protected string $runtimeMode;
     
     /**
      * 构造函数
@@ -31,7 +30,7 @@ abstract class BaseShell
      */
     public function __construct()
     {
-        $this->runtimeMode = new Runtime();
+        $this->runtimeMode = Runtime::detect();
         $this->request = new Request();
     }
     

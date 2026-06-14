@@ -253,7 +253,9 @@ class RouteManager
 
                 try {
                     $container = $this->container;
-                    if ($exceptionHandler = $container->get(config('exception.handler'))) {
+                    $exceptionHandlerClass = config('exception.handler');
+                    if ($exceptionHandlerClass && $container->has($exceptionHandlerClass)) {
+                        $exceptionHandler = $container->get($exceptionHandlerClass);
                         $response = $exceptionHandler->handle($e, 'cli');
                         if ($response instanceof Response) {
                             $resolve($response);
@@ -315,14 +317,11 @@ class RouteManager
 
             try {
                 $container = $this->container;
-                if ($exceptionHandler = config('exception.handler')) {
-                    if ($container->has($exceptionHandler)) {
-                        $handler = $container->get($exceptionHandler);
-                        $response = $handler->handle($e, 'shell');
-                        echo $response . "\n";
-                    } else {
-                        echo "执行命令失败: " . $e->getMessage() . "\n";
-                    }
+                $exceptionHandlerClass = config('exception.handler');
+                if ($exceptionHandlerClass && $container->has($exceptionHandlerClass)) {
+                    $handler = $container->get($exceptionHandlerClass);
+                    $response = $handler->handle($e, 'shell');
+                    echo $response . "\n";
                 } else {
                     echo "执行命令失败: " . $e->getMessage() . "\n";
                     if ($_ENV['APP_DEBUG'] ?? false) {
@@ -391,11 +390,7 @@ class RouteManager
 
                 if (method_exists($controllerInstance, $actionMethod)) {
                     if (method_exists($controllerInstance, 'before')) {
-                        try {
-                            $controllerInstance->before();
-                        } catch (\Exception $e) {
-                            // 处理异常
-                        }
+                        $controllerInstance->before();
                     }
 
                     return $controllerInstance->$actionMethod();
@@ -415,11 +410,7 @@ class RouteManager
 
                 if (method_exists($controllerInstance, $actionMethod)) {
                     if (method_exists($controllerInstance, 'before')) {
-                        try {
-                            $controllerInstance->before();
-                        } catch (\Exception $e) {
-                            // 处理异常
-                        }
+                        $controllerInstance->before();
                     }
 
                     return $controllerInstance->$actionMethod();

@@ -283,18 +283,7 @@ class Application extends Container
     {
         $request = $this->get('request');
 
-        // 处理 JSON 请求体
         $httpMethod = $request->server('REQUEST_METHOD', 'GET');
-        if (in_array($httpMethod, ['POST', 'PUT', 'PATCH'])) {
-            $contentType = $request->server('CONTENT_TYPE', '');
-            if (strpos($contentType, 'application/json') !== false) {
-                $jsonData = $request->getJsonBody();
-                if (!empty($jsonData)) {
-                    $_POST = array_merge($_POST, $jsonData);
-                    $_REQUEST = array_merge($_REQUEST, $jsonData);
-                }
-            }
-        }
 
         $uri = $request->server('REQUEST_URI', '/');
 

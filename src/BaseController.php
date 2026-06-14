@@ -3,7 +3,6 @@
 namespace PHPFrame;
 
 use PHPFrame\Request;
-use PHPFrame\RequestIsolationManager;
 use PHPFrame\Response;
 use PHPFrame\Runtime;
 use React\Http\Message\Response as ReactResponse;
@@ -29,10 +28,9 @@ abstract class BaseController
     protected $response;
     
     /**
-     * @var Runtime 运行模式检测器
-     * Runtime mode detector
+     * @var string 运行模式缓存
      */
-    protected $runtimeMode;
+    protected string $runtimeMode;
     
     /**
      * 构造函数
@@ -40,13 +38,9 @@ abstract class BaseController
      */
     public function __construct()
     {
-        $this->runtimeMode = new Runtime();
+        $this->runtimeMode = Runtime::detect();
         $this->request = new Request();
         $this->response = new Response();
-        
-        if ($this->runtimeMode->isCli() || $this->runtimeMode->isShell()) {
-            RequestIsolationManager::isolateAll();
-        }
     }
     
     /**
@@ -194,10 +188,10 @@ abstract class BaseController
      */
     protected function redirect(string $url, int $statusCode = 302)
     {
-        if ($this->runtimeMode->isFpm()) {
+        if ($this->runtimeMode === Runtime::MODE_FPM) {
             // FPM模式：使用传统的HTTP重定向
             return $this->response->redirect($url, $statusCode);
-        } elseif ($this->runtimeMode->isCli()) {
+        } elseif ($this->runtimeMode === Runtime::MODE_CLI) {
             // CLI模式（ReactPHP常驻内存模式）：返回ReactPHP重定向响应
             return new ReactResponse(
                 $statusCode,
@@ -250,7 +244,7 @@ abstract class BaseController
      */
     protected function isFpmMode(): bool
     {
-        return $this->runtimeMode->isFpm();
+        return $this->runtimeMode === Runtime::MODE_FPM;
     }
     
     /**
@@ -259,7 +253,7 @@ abstract class BaseController
      */
     protected function isCliMode(): bool
     {
-        return $this->runtimeMode->isCli();
+        return $this->runtimeMode === Runtime::MODE_CLI;
     }
     
     /**
@@ -268,7 +262,7 @@ abstract class BaseController
      */
     protected function isShellMode(): bool
     {
-        return $this->runtimeMode->isShell();
+        return $this->runtimeMode === Runtime::MODE_SHELL;
     }
     
     /**
@@ -278,7 +272,7 @@ abstract class BaseController
     {
         // CLI/Shell 模式下仅清理请求参数，不强制 GC
         // gc_collect_cycles() 开销大，应由业务层按需调用
-        if (($this->runtimeMode->isCli() || $this->runtimeMode->isShell()) && $this->request) {
+        if (($this->runtimeMode === Runtime::MODE_CLI || $this->runtimeMode === Runtime::MODE_SHELL) && $this->request) {
             $this->request->setParams([]);
         }
     }

@@ -97,7 +97,7 @@ $deleted = Cache::deleteByPattern('db_query:*');
 $deleted = Cache::deleteByPattern('user:*');
 ```
 
-> `deleteByPattern()` 使用 Store 的前缀构建完整键模式，确保与 `get()`/`set()` 等方法的键格式一致。匹配到的键会通过 `delete()` 方法逐个删除，保证前缀处理的一致性。
+> `deleteByPattern()` 使用 Store 的前缀构建完整键模式，确保与 `get()`/`set()` 等方法的键格式一致。匹配到的键会通过 `delete()` 方法逐个删除，保证前缀处理的一致性。内部通过 `app('redis')` 获取 Redis 连接实例，与容器注册的服务名一致。
 
 ### 批量删除
 

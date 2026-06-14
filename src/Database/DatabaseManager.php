@@ -422,10 +422,8 @@ class DatabaseManager
     protected function isCacheable(string $sql): bool
     {
         $sql = strtoupper(trim($sql));
-        return strpos($sql, 'SELECT') === 0
-            && strpos($sql, 'INSERT') === false
-            && strpos($sql, 'UPDATE') === false
-            && strpos($sql, 'DELETE') === false;
+        // SELECT开头的SQL不可能同时以INSERT/UPDATE/DELETE开头，无需额外检查
+        return strpos($sql, 'SELECT') === 0;
     }
 
     /**

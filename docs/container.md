@@ -69,7 +69,7 @@ $req2 = app()->get('request');
 
 ### 循环依赖检测
 
-容器自动检测循环依赖并抛出异常，避免无限递归：
+容器自动检测循环依赖并抛出异常，避免无限递归。内部使用哈希映射实现 O(1) 查找，性能优于线性搜索：
 
 ```php
 app()->set('A', function ($c) { return new A($c->get('B')); });
@@ -109,13 +109,14 @@ app()->unset('my_service');
 |---------|-----|------|
 | `app` | Application | 应用实例自身 |
 | `config` | ConfigManager | 配置管理器 |
-| `request` | Request | 请求对象 |
+| `request` | Request | 请求对象（CLI 模式下为原型服务） |
 | `db` | Database\DatabaseManager | 数据库管理器 |
 | `cache` | CacheManager | 缓存管理器 |
 | `logger` | Logger | 日志管理器 |
 | `router` | RouteManager | 路由管理器 |
 | `twig` | \Twig\Environment | 模板引擎 |
-| `redis.connection` | Redis | Redis 连接实例 |
+| `redis` | Redis | Redis 连接实例 |
+| `redis.manager` | RedisManager | Redis 管理器 |
 
 ### 检查服务是否存在
 
@@ -139,3 +140,5 @@ $services = app()->getRegisteredServices();
 - 核心服务在 `Application::initialize()` 中仅注册一次，不会重复注册
 - `app` 服务直接指向 Application 实例自身，`App::env()` 等门面方法调用的是 Application 上的方法
 - `Application::initialize()` 支持多实例场景，每个 Application 实例独立初始化
+- `request` 服务在 CLI 常驻内存模式下注册为原型服务，每次解析返回新实例，避免请求间状态污染
+- 循环依赖检测使用哈希映射（`isset`）而非线性搜索（`in_array`），确保 O(1) 查找性能

@@ -136,6 +136,30 @@ ReactPHP 接收请求 → Application::runCli()
     → 输出结果
 ```
 
+## 控制器 before() 钩子
+
+如果控制器定义了 `before()` 方法，它会在 action 方法之前自动调用。`before()` 中抛出的异常会正常传播到异常处理器，不会被静默吞掉：
+
+```php
+class UserController extends BaseController
+{
+    public function before()
+    {
+        // 权限检查等前置逻辑
+        if (!$this->hasParam('token')) {
+            throw new \InvalidArgumentException('Token is required');
+        }
+    }
+
+    public function profileAction()
+    {
+        // before() 通过后才会执行
+    }
+}
+```
+
+> 注意：旧版本中 `before()` 抛出的异常会被静默吞掉，新版本已修复此行为，异常会正常传播。
+
 ## RouteManager API
 
 `RouteManager` 是路由分发核心，由框架自动创建并注册到容器（`app('router')`），通常不需要直接操作。

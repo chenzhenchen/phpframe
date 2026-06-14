@@ -106,7 +106,7 @@ class Logger
     }
 
     /**
-     * 日期变化时更新 StreamHandler 的目标文件
+     * 日期变化时重建 StreamHandler，避免使用反射
      */
     protected function rotateHandlers(): void
     {
@@ -118,19 +118,37 @@ class Logger
             if ($logger === null) {
                 continue;
             }
+
+            $newHandlers = [];
             foreach ($logger->getHandlers() as $handler) {
                 if ($handler instanceof StreamHandler) {
-                    // Monolog StreamHandler 的 $url 属性存储日志文件路径
-                    // 使用反射更新，因为 setUrl() 方法在旧版本中可能不存在
-                    try {
-                        $ref = new \ReflectionProperty($handler, 'url');
-                        $ref->setAccessible(true);
-                        $ref->setValue($handler, $this->cachedLogPath);
-                    } catch (\ReflectionException $e) {
-                        // 降级：关闭旧 handler 并创建新 handler
-                        $handler->close();
+                    $handler->close();
+
+                    // 根据logger类型重建对应格式的handler
+                    if ($logger === $this->requestMonolog) {
+                        $newHandler = new StreamHandler($this->cachedLogPath, MonologLogger::DEBUG);
+                        $newHandler->setFormatter(new LineFormatter('%message%', 'Y-m-d H:i:s', false, true));
+                    } else {
+                        $newHandler = new StreamHandler($this->cachedLogPath, MonologLogger::DEBUG);
+                        $newHandler->setFormatter(new LineFormatter(
+                            "[%datetime%] %channel%.%level_name%: %message% %context%\n",
+                            'Y-m-d H:i:s',
+                            false,
+                            true
+                        ));
                     }
+                    $newHandlers[] = $newHandler;
+                } else {
+                    $newHandlers[] = $handler;
                 }
+            }
+
+            // 替换handlers
+            while ($logger->getHandlers()) {
+                $logger->popHandler();
+            }
+            foreach ($newHandlers as $handler) {
+                $logger->pushHandler($handler);
             }
         }
     }

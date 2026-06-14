@@ -55,6 +55,15 @@ class Request
         $request->injectedBody = file_get_contents('php://input') ?: '';
         $request->dataInjected = true;
 
+        // 处理JSON请求体：将JSON数据合并到injectedPost，使post()和get()可访问
+        $contentType = $request->injectedServer['CONTENT_TYPE'] ?? $request->injectedServer['HTTP_CONTENT_TYPE'] ?? '';
+        if (strpos($contentType, 'application/json') !== false && !empty($request->injectedBody)) {
+            $jsonParams = json_decode($request->injectedBody, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonParams)) {
+                $request->injectedPost = array_merge($request->injectedPost, $jsonParams);
+            }
+        }
+
         // 合并路由参数和请求参数（兼容 setFpmParams 的行为）
         $request->params = array_merge($_REQUEST ?? [], $request->params);
 

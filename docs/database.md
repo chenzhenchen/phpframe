@@ -90,7 +90,7 @@ DatabaseManager 支持查询结果缓存，优先委托给 CacheManager（Redis/
 
 ### 自动缓存
 
-SELECT 查询结果会自动缓存（默认 60 秒），INSERT/UPDATE/DELETE 操作会自动清除缓存：
+SELECT 查询结果会自动缓存（默认 60 秒），INSERT/UPDATE/DELETE 操作会自动清除缓存。缓存判断逻辑仅检查 SQL 是否以 `SELECT` 开头（不区分大小写），简洁高效：
 
 ```php
 // 第一次查询：数据库查询 + 缓存

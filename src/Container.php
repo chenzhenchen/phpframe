@@ -14,9 +14,9 @@ class Container
     protected $prototypes = [];
 
     /**
-     * 当前正在解析的服务ID栈（用于循环依赖检测）
+     * 当前正在解析的服务ID映射（用于循环依赖检测，O(1)查找）
      */
-    protected array $resolutionStack = [];
+    protected array $resolutionMap = [];
 
     public function __construct(array $config = [])
     {
@@ -56,9 +56,9 @@ class Container
 
     public function get($id)
     {
-        // 循环依赖检测
-        if (in_array($id, $this->resolutionStack, true)) {
-            $chain = implode(' → ', $this->resolutionStack) . ' → ' . $id;
+        // 循环依赖检测（O(1)查找）
+        if (isset($this->resolutionMap[$id])) {
+            $chain = implode(' → ', array_keys($this->resolutionMap)) . ' → ' . $id;
             throw new \Exception("Circular dependency detected: {$chain}");
         }
 
@@ -68,7 +68,7 @@ class Container
         }
 
         if (isset($this->services[$id])) {
-            $this->resolutionStack[] = $id;
+            $this->resolutionMap[$id] = true;
             try {
                 if (is_callable($this->services[$id])) {
                     $instance = $this->services[$id]($this);
@@ -76,7 +76,7 @@ class Container
                     $instance = $this->services[$id];
                 }
             } finally {
-                array_pop($this->resolutionStack);
+                unset($this->resolutionMap[$id]);
             }
 
             // 原型服务不缓存实例
@@ -87,11 +87,11 @@ class Container
         }
 
         if (class_exists($id)) {
-            $this->resolutionStack[] = $id;
+            $this->resolutionMap[$id] = true;
             try {
                 $instance = $this->autoRegister($id);
             } finally {
-                array_pop($this->resolutionStack);
+                unset($this->resolutionMap[$id]);
             }
 
             if (!isset($this->prototypes[$id])) {
@@ -101,11 +101,11 @@ class Container
         }
 
         if (interface_exists($id)) {
-            $this->resolutionStack[] = $id;
+            $this->resolutionMap[$id] = true;
             try {
                 $instance = $this->resolveInterface($id);
             } finally {
-                array_pop($this->resolutionStack);
+                unset($this->resolutionMap[$id]);
             }
 
             if (!isset($this->prototypes[$id])) {
@@ -269,14 +269,15 @@ class Container
         // 哈希服务
         $this->services['hash'] = new \Illuminate\Hashing\BcryptHasher();
 
-        // 请求服务
+        // 请求服务（FPM模式单例，CLI模式每次创建新实例避免状态污染）
         $this->services['request'] = function () {
-            static $instance = null;
-            if ($instance === null) {
-                $instance = Request::createFromGlobals();
-            }
-            return $instance;
+            return Request::createFromGlobals();
         };
+
+        // CLI常驻内存模式下，request 应为原型服务（每次解析返回新实例）
+        if (defined('APP_MODE') && APP_MODE === 'cli') {
+            $this->prototypes['request'] = true;
+        }
 
 
     }

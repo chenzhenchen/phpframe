@@ -181,7 +181,7 @@ class CacheManager
                 $fullPattern = $storePrefix . $pattern;
 
                 // 获取Redis连接实例
-                $redis = app('redis.connection');
+                $redis = app('redis');
 
                 // 使用scan命令避免阻塞（生产环境推荐）
                 $iterator = null;

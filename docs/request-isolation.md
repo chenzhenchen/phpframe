@@ -18,21 +18,19 @@ $userId = $this->getParam('user_id'); // 可能仍然是 1
 
 ## 自动隔离
 
-`BaseController` 在 CLI/Shell 模式下自动调用 `RequestIsolationManager::isolateAll()`：
+请求隔离由框架在请求级别统一管理，不再在 `BaseController` 构造函数中执行。`BaseController` 仅负责初始化请求和响应对象：
 
 ```php
-// BaseController 构造函数中
+// BaseController 构造函数
 public function __construct()
 {
-    $this->runtimeMode = new Runtime();
+    $this->runtimeMode = Runtime::detect();
     $this->request = new Request();
     $this->response = new Response();
-
-    if ($this->runtimeMode->isCli() || $this->runtimeMode->isShell()) {
-        RequestIsolationManager::isolateAll();
-    }
 }
 ```
+
+> 注意：旧版本在 `BaseController` 构造函数中调用 `RequestIsolationManager::isolateAll()`，这会导致每个控制器实例化都执行隔离操作。新版本已移除此行为，隔离应在请求生命周期入口处按需调用。
 
 默认隔离的服务：
 

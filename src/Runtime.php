@@ -14,37 +14,54 @@ class Runtime
     public const MODE_FPM = 'fpm';
     public const MODE_CLI = 'cli';
     public const MODE_SHELL = 'shell';
-    
+
+    /**
+     * 缓存检测结果，避免重复计算
+     */
+    protected static ?string $detectedMode = null;
+
     /**
      * 检测当前运行模式
      */
     public static function detect(): string
     {
+        if (self::$detectedMode !== null) {
+            return self::$detectedMode;
+        }
+
         // 优先检查定义的常量
         if (defined('APP_MODE')) {
-            return APP_MODE;
+            return self::$detectedMode = APP_MODE;
         }
-        
+
         // 根据PHP_SAPI判断
         $sapi = PHP_SAPI;
-        
+
         switch ($sapi) {
             case 'fpm-fcgi':
             case 'apache2handler':
             case 'cgi-fcgi':
-                return self::MODE_FPM;
-                
+                return self::$detectedMode = self::MODE_FPM;
+
             case 'cli':
                 // 区分CLI和Shell模式
                 global $argv;
                 if (isset($argv[0]) && basename($argv[0]) === 'shell.php') {
-                    return self::MODE_SHELL;
+                    return self::$detectedMode = self::MODE_SHELL;
                 }
-                return self::MODE_CLI;
-                
+                return self::$detectedMode = self::MODE_CLI;
+
             default:
-                return self::MODE_FPM; // 默认为FPM模式
+                return self::$detectedMode = self::MODE_FPM; // 默认为FPM模式
         }
+    }
+
+    /**
+     * 重置检测缓存（用于模式切换场景，如测试）
+     */
+    public static function resetDetection(): void
+    {
+        self::$detectedMode = null;
     }
     
     /**

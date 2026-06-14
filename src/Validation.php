@@ -16,7 +16,7 @@ class Validation
         foreach ($rules as $field => $rule) {
             $value = $data[$field] ?? null;
             
-            if (strpos($rule, 'required') !== false && empty($value)) {
+            if (strpos($rule, 'required') !== false && ($value === null || $value === '')) {
                 $this->errors[$field] = "{$field} 字段是必填的";
                 continue;
             }

@@ -139,6 +139,23 @@ $request = new Request();
 $request->get('name');  // 从 $_REQUEST 读取
 ```
 
+## JSON 请求体自动解析
+
+`createFromGlobals()` 和 `createFromServerRequest()` 会自动检测 `Content-Type: application/json` 请求，将 JSON 数据合并到 `injectedPost` 中，使 `post()` 和 `get()` 方法可直接访问 JSON 字段，无需手动解析：
+
+```php
+// 客户端发送 JSON 请求
+// Content-Type: application/json
+// {"name": "John", "email": "john@example.com"}
+
+$request = Request::createFromGlobals();
+$request->post('name');   // 'John'
+$request->get('email');   // 'john@example.com'
+$request->getJsonBody();  // ['name' => 'John', 'email' => 'john@example.com']
+```
+
+> 注意：框架不再直接修改 `$_POST` / `$_REQUEST` 超全局变量，JSON 数据仅通过 Request 对象的注入属性提供，保持了请求封装的完整性。
+
 ## 在 BaseController 中的使用
 
 ```php
