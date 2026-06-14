@@ -101,6 +101,8 @@ Route::registerMiddleware('auth', new AuthMiddleware());
 Route::handlerMiddleware('App\Controllers\UserController@profile', ['auth']);
 ```
 
+> 注意：`Route::middleware()`、`Route::registerMiddleware()`、`Route::handlerMiddleware()` 是 Route Facade 的代理方法，内部通过 `app('router')` 转发到 RouteManager 实例。
+
 ## 路由分发流程
 
 ### FPM 模式

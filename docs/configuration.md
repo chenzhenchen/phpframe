@@ -102,11 +102,11 @@ $config->has('app.name');
 ## 动态修改配置
 
 ```php
-// 运行时修改（不持久化）
-config('app.debug', true);
-// 或
-Config::set('app.debug', true);
+// 运行时修改（不持久化），通过 ConfigManager
+app('config')->set('app.debug', true);
 ```
+
+> 注意：`config()` 全局函数仅支持获取配置值，不支持设置。`Config` Facade 也仅代理了 `get`、`has`、`all` 方法。如需运行时修改配置，请通过容器直接操作 ConfigManager。
 
 ## 环境变量
 

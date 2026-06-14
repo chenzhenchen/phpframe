@@ -190,7 +190,7 @@ $db->resetStats();
 | `select($sql, $bindings)` | 执行 SELECT 查询 |
 | `selectOne($sql, $bindings)` | 查询单条记录 |
 | `insert($sql, $bindings)` | 插入数据 |
-| `update($sql, $bindings)` | 更新数据 |
+| `update($sql, $bindings)` | 更新数据（返回影响行数） |
 | `delete($sql, $bindings)` | 删除数据 |
 | `statement($sql, $bindings)` | 执行任意 SQL |
 | `table($table)` | 获取查询构建器 |
@@ -200,11 +200,18 @@ $db->resetStats();
 | `transaction($callback)` | 闭包事务 |
 | `tableExists($name)` | 检查表是否存在 |
 | `getTableInfo($name)` | 获取表结构 |
+| `getDatabaseSize()` | 获取数据库大小 |
+| `getVersion()` | 获取数据库版本 |
 | `setCacheManager($cache)` | 设置缓存管理器 |
 | `setQueryCacheTTL($seconds)` | 设置缓存 TTL |
+| `setQueryCachePrefix($prefix)` | 设置缓存前缀 |
 | `enablePersistentConnections($bool)` | 启用持久连接 |
 | `enableQueryLog()` | 开启查询日志 |
+| `disableQueryLog()` | 关闭查询日志 |
 | `getStats()` | 获取查询统计 |
+| `resetStats()` | 重置查询统计 |
 | `getConnectionInfo()` | 获取连接信息 |
 | `isConnected()` | 检查连接状态 |
 | `disconnect()` | 断开连接 |
+| `reconnect()` | 重连（断开后重连） |
+| `getCapsuleInstance()` | 获取 Capsule Manager 实例 |

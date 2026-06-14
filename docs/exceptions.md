@@ -130,6 +130,21 @@ throw new HttpException(401, 'Unauthorized');
 | `report($exception, $mode)` | 记录异常日志 |
 | `render($exception, $mode)` | 渲染异常响应 |
 
+> 内置 ExceptionHandler 还包含以下受保护的方法，可在自定义子类中覆写：
+> - `shouldntReport($exception)` — 判断异常是否在 `$dontReport` 列表中，跳过不需要记录的异常类型
+> - `getLogLevel($exception)` — 根据异常类型获取日志级别（`ErrorException` 按严重程度映射，其他为 `error`）
+> - `buildLogContext($exception, $mode)` — 构建日志上下文数据
+>
+> 自定义处理器可继承 `ExceptionHandler` 并覆写 `$dontReport` 属性来排除特定异常类型：
+> ```php
+> class MyHandler extends \PHPFrame\Exceptions\ExceptionHandler
+> {
+>     protected array $dontReport = [
+>         \InvalidArgumentException::class,
+>     ];
+> }
+> ```
+
 ## HttpException API
 
 | 方法 | 说明 |

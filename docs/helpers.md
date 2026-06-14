@@ -20,7 +20,7 @@ $logger = app('logger');
 
 ### `config($key = null, $default = null)`
 
-获取或设置配置值：
+获取配置值：
 
 ```php
 // 获取配置
@@ -31,24 +31,17 @@ $host = config('database.connections.default.host', '127.0.0.1');
 $all = config();
 ```
 
+> 注意：`config()` 函数仅用于获取配置值。如需运行时修改配置，请使用 `app('config')->set('key', 'value')`。
+
 ## 路径相关
 
-### `base_path($path = '')`
+### `root_path($path = '')`
 
 项目根目录：
 
 ```php
-base_path();            // /var/www/my-project
-base_path('composer.json'); // /var/www/my-project/composer.json
-```
-
-### `app_path($path = '')`
-
-app 目录：
-
-```php
-app_path();             // /var/www/my-project/app
-app_path('Controllers'); // /var/www/my-project/app/Controllers
+root_path();            // /var/www/my-project
+root_path('composer.json'); // /var/www/my-project/composer.json
 ```
 
 ### `config_path($path = '')`
@@ -87,6 +80,15 @@ database_path();            // /var/www/my-project/database
 database_path('migrations'); // /var/www/my-project/database/migrations
 ```
 
+### `resource_path($path = '')`
+
+resources 目录：
+
+```php
+resource_path();            // /var/www/my-project/resources
+resource_path('templates'); // /var/www/my-project/resources/templates
+```
+
 ## 环境变量
 
 ### `env($key, $default = null)`
@@ -118,4 +120,59 @@ logger()->error('Something went wrong', ['context' => $data]);
 ```php
 value('hello');            // 'hello'
 value(fn() => 'hello');    // 'hello'
+```
+
+### `dd(...$vars)`
+
+调试函数：打印变量并终止脚本：
+
+```php
+dd($user, $orders);
+```
+
+### `array_get($array, $key, $default = null)`
+
+使用点号表示法从数组中获取值：
+
+```php
+$data = ['database' => ['host' => '127.0.0.1']];
+$host = array_get($data, 'database.host'); // '127.0.0.1'
+```
+
+## 请求隔离
+
+### `isolate_request($force = false)`
+
+执行请求级状态隔离（常驻内存模式下清除上一个请求的残留状态）：
+
+```php
+// 仅在 CLI 模式下执行
+isolate_request();
+
+// 强制执行（忽略模式检查）
+isolate_request(true);
+```
+
+### `isolate_service($serviceId)`
+
+隔离单个服务：
+
+```php
+isolate_service('db');
+```
+
+### `register_isolatable_service($serviceId, $class, $methods, $description)`
+
+注册需要隔离的服务：
+
+```php
+register_isolatable_service('my_service', MyService::class, ['reset'], '我的服务');
+```
+
+### `get_isolation_report()`
+
+获取隔离状态报告：
+
+```php
+$report = get_isolation_report();
 ```

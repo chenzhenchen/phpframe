@@ -11,10 +11,10 @@
 | `Cache` | `cache` | 缓存 |
 | `App` | `app` | 应用容器 |
 | `Config` | `config` | 配置 |
-| `Route` | - | 路由注册（直接操作 RouteCollector） |
+| `Route` | - | 路由注册（直接操作 RouteCollector，中间件方法代理到 RouteManager） |
 | `Hash` | `hash` | 哈希 |
-| `Redis` | `redis.connection` | Redis 连接 |
-| `Request` | `request` | 请求 |
+| `Redis` | `redis` | Redis 连接实例（含 db()/resetDb() 数据库切换方法） |
+| `Request` | `request` | 请求（含扩展方法：isAjax/isPost/isGet/isDelete/isPut/isPatch/getHeader/getUserAgent/getReferer/getContentType/getClientIpAdvanced/getRealClientIp/setParams） |
 
 ## 使用方式
 
@@ -38,12 +38,13 @@ Cache::set('key', 'value', 3600);
 $value = Cache::get('key');
 
 // 应用
-App::env();       // 当前环境
-App::isDebug();   // 是否调试模式
+App::get('db');         // 从容器获取服务
+App::has('cache');      // 检查服务是否存在
+App::set('my', fn() => new MyService());  // 注册服务
 
 // 配置
 Config::get('app.name');
-Config::set('app.debug', true);
+Config::has('app.debug');
 ```
 
 ## 创建自定义门面
@@ -108,7 +109,8 @@ Log::clearContext();
 | `setContext($context)` | 设置门面上下文 |
 | `getContext()` | 获取门面上下文 |
 | `clearContext()` | 清除门面上下文 |
-| `getLogger()` (Log 门面) | 获取 Logger 实例 |
+
+> 注意：`Log::getLogger()` 是 Log 门面特有的方法，不是 Facade 基类方法。
 
 ## 工作原理
 

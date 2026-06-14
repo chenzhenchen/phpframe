@@ -113,9 +113,9 @@ app()->unset('my_service');
 | `db` | Database\DatabaseManager | 数据库管理器 |
 | `cache` | CacheManager | 缓存管理器 |
 | `logger` | Logger | 日志管理器 |
-| `router` | RouteManager | 路由管理器 |
+| `router` | FastRoute Dispatcher | 路由分发器（FastRoute 实例，非 RouteManager） |
 | `twig` | \Twig\Environment | 模板引擎 |
-| `redis` | Redis | Redis 连接实例 |
+| `redis` | Redis Connection | Redis 连接实例（通过 redis.manager 获取） |
 | `redis.manager` | RedisManager | Redis 管理器 |
 
 ### 检查服务是否存在
@@ -138,7 +138,7 @@ $services = app()->getRegisteredServices();
 
 - `Container::getInstance()` 委托给 `Application::getInstance()`，确保全局只有一个容器实例
 - 核心服务在 `Application::initialize()` 中仅注册一次，不会重复注册
-- `app` 服务直接指向 Application 实例自身，`App::env()` 等门面方法调用的是 Application 上的方法
+- `app` 服务直接指向 Application 实例自身，`App::get()`、`App::set()`、`App::has()` 等门面方法调用的是 Container 上的方法
 - `Application::initialize()` 支持多实例场景，每个 Application 实例独立初始化
 - `request` 服务在 CLI 常驻内存模式下注册为原型服务，每次解析返回新实例，避免请求间状态污染
 - 循环依赖检测使用哈希映射（`isset`）而非线性搜索（`in_array`），确保 O(1) 查找性能

@@ -33,22 +33,27 @@ Response::json($data, 200, '消息');
 ## 重定向
 
 ```php
-// FPM 模式
+// 在控制器中（推荐，自动适配模式）
 return $this->redirect('/login', 302);
+// FPM 模式：设置 Location header
+// CLI 模式：返回 ReactResponse（含 Location header）
+// Shell 模式：抛出 RuntimeException
 
-// CLI 模式（返回 ReactResponse）
-return $this->redirect('/login', 302);
+// 静态调用（仅 FPM 模式可用，非 FPM 模式抛出 RuntimeException）
+Response::redirect('/login', 302);
 ```
 
-> 注意：`redirect()` 仅设置 `Location` header 并返回响应，不会强制终止脚本执行。中间件的后置逻辑仍会正常执行，确保洋葱模型完整性。
-
-> 注意：重定向在 Shell 模式下不可用。
+> 注意：控制器中的 `redirect()` 方法会根据运行模式自动适配行为，推荐使用。静态 `Response::redirect()` 仅适用于 FPM 模式。两种方式均不会强制终止脚本执行。
 
 ## 分页数据
 
 ```php
+// 在控制器中（通过 BaseController 代理方法）
 $paginator = Db::table('users')->paginate(15);
 return $this->generatePagination($paginator);
+
+// 静态调用
+return Response::pagination($paginator);
 // 输出:
 // {
 //   "current_page": 1,

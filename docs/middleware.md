@@ -55,7 +55,12 @@ class AuthMiddleware implements MiddlewareInterface
 全局中间件对所有路由生效：
 
 ```php
-// 在路由注册之前或应用初始化后
+use PHPFrame\Facades\Route;
+
+// 通过 Route Facade 注册（推荐）
+Route::middleware(new AuthMiddleware());
+
+// 或通过 RouteManager 实例
 $routeManager = app('router');
 $routeManager->middleware(new AuthMiddleware());
 
@@ -72,15 +77,20 @@ $routeManager->middlewares([
 路由级中间件通过别名注册，然后绑定到指定的控制器方法（handler）：
 
 ```php
-$routeManager = app('router');
+use PHPFrame\Facades\Route;
 
-// 第一步：注册中间件别名
-$routeManager->registerMiddleware('auth', new AuthMiddleware());
-$routeManager->registerMiddleware('throttle', new ThrottleMiddleware());
+// 第一步：注册中间件别名（推荐通过 Route Facade）
+Route::registerMiddleware('auth', new AuthMiddleware());
+Route::registerMiddleware('throttle', new ThrottleMiddleware());
 
 // 第二步：将中间件绑定到指定 handler
+Route::handlerMiddleware('App\Controllers\UserController@profile', ['auth']);
+Route::handlerMiddleware('App\Controllers\PostController@create', ['auth', 'throttle']);
+
+// 也可以通过 RouteManager 实例操作
+$routeManager = app('router');
+$routeManager->registerMiddleware('auth', new AuthMiddleware());
 $routeManager->handlerMiddleware('App\Controllers\UserController@profile', ['auth']);
-$routeManager->handlerMiddleware('App\Controllers\PostController@create', ['auth', 'throttle']);
 
 // 获取中间件
 $authMiddleware = $routeManager->getRouteMiddleware('auth');

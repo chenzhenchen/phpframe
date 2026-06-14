@@ -139,6 +139,8 @@ $request = new Request();
 $request->get('name');  // 从 $_REQUEST 读取
 ```
 
+> 注意：降级模式下 `getJsonBody()` 会直接返回 `$_POST`（因为旧版框架曾将 JSON 数据写入 `$_POST`），建议始终使用 `createFromGlobals()` 创建 Request 实例。
+
 ## JSON 请求体自动解析
 
 `createFromGlobals()` 和 `createFromServerRequest()` 会自动检测 `Content-Type: application/json` 请求，将 JSON 数据合并到 `injectedPost` 中，使 `post()` 和 `get()` 方法可直接访问 JSON 字段，无需手动解析：
@@ -155,6 +157,39 @@ $request->getJsonBody();  // ['name' => 'John', 'email' => 'john@example.com']
 ```
 
 > 注意：框架不再直接修改 `$_POST` / `$_REQUEST` 超全局变量，JSON 数据仅通过 Request 对象的注入属性提供，保持了请求封装的完整性。
+
+## Request 门面扩展方法
+
+`PHPFrame\Facades\Request` 除了代理 Request 实例方法外，还提供了以下扩展静态方法，自动适配 FPM/CLI/Shell 三种模式：
+
+```php
+use PHPFrame\Facades\Request;
+
+// 请求方法判断
+Request::isPost();
+Request::isGet();
+Request::isPut();
+Request::isDelete();
+Request::isPatch();
+
+// AJAX 检测
+Request::isAjax();
+
+// 请求头
+Request::getHeader('x-request-id');
+Request::getUserAgent();
+Request::getReferer();
+Request::getContentType();
+
+// 增强客户端 IP（支持代理头解析）
+Request::getClientIpAdvanced();
+
+// 真实客户端 IP（不考虑代理）
+Request::getRealClientIp();
+
+// 设置请求参数（测试用）
+Request::setParams(['key' => 'value']);
+```
 
 ## 在 BaseController 中的使用
 
@@ -177,7 +212,7 @@ class UserController extends BaseController
         $validated = $this->validate([
             'name' => 'required',
             'email' => 'required|email',
-            'age' => 'numeric|min:1|max:150',
+            'age' => 'integer|max:150',
         ]);
 
         // 检查参数

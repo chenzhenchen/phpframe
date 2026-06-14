@@ -46,19 +46,34 @@ REDIS_PORT=6379
 ```
 my-project/
 ├── app/
-│   └── Controllers/
-│       ├── Default/              # HTTP 控制器（继承 BaseController）
-│       │   ├── Controller.php    # 控制器基类
-│       │   └── DefaultController.php
-│       └── Shell/                # Shell 控制器（继承 BaseShell）
-│           ├── DefaultShell.php
-│           └── DatabaseShell.php
+│   ├── Controllers/
+│   │   ├── Default/              # HTTP 控制器（继承 BaseController）
+│   │   │   ├── Controller.php    # 控制器基类
+│   │   │   └── DefaultController.php
+│   │   └── Shell/                # Shell 控制器（继承 BaseShell）
+│   │       ├── DefaultShell.php
+│   │       └── DatabaseShell.php
+│   ├── Library/                  # 自定义类库
+│   ├── Middleware/               # 中间件
+│   │   ├── AuthMiddleware.php
+│   │   └── CorsMiddleware.php
+│   ├── Models/                   # Eloquent 模型
+│   │   └── User.php
+│   └── Services/                 # 业务服务层
+│       └── UserService.php
 ├── config/                       # 配置文件（自动加载）
 │   ├── app.php                   # 应用配置
 │   ├── database.php              # 数据库配置
 │   ├── cache.php                 # 缓存配置
 │   ├── log.php                   # 日志配置
 │   └── exception.php             # 异常处理配置
+├── database/
+│   └── field_template.php        # 数据库字段模板
+├── resources/
+│   └── templates/                # Twig 模板
+│       ├── default/
+│       │   └── test.twig
+│       └── 404.html
 ├── routes/
 │   ├── default.php               # HTTP 路由定义
 │   └── shell.php                 # Shell 路由定义
@@ -91,6 +106,12 @@ php -S localhost:8000 -t public/
 if (!defined('APP_MODE')) {
     define('APP_MODE', 'fpm');
 }
+
+if (!file_exists(dirname(__DIR__) . '/vendor/autoload.php')) {
+    echo "错误: Composer依赖未安装，请先运行 'composer install'\n";
+    exit(1);
+}
+
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 $app = new PHPFrame\Application();
 $app->run();
@@ -113,6 +134,12 @@ php cli.php server start --host=0.0.0.0 --port=8000 --worker=4 --daemon
 if (!defined('APP_MODE')) {
     define('APP_MODE', 'cli');
 }
+
+if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
+    echo "错误: Composer依赖未安装，请先运行 'composer install'\n";
+    exit(1);
+}
+
 require_once __DIR__ . '/vendor/autoload.php';
 $app = new PHPFrame\Application();
 $app->run();
@@ -134,6 +161,12 @@ php shell.php database/tables
 if (!defined('APP_MODE')) {
     define('APP_MODE', 'shell');
 }
+
+if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
+    echo "错误: Composer依赖未安装，请先运行 'composer install'\n";
+    exit(1);
+}
+
 require_once __DIR__ . '/vendor/autoload.php';
 $app = new PHPFrame\Application();
 $app->run();

@@ -68,6 +68,16 @@ $results = Task::all([
     fn() => fetchApi('/orders'),
     fn() => fetchApi('/products'),
 ]);
+
+// 返回值格式（与 concurrent() 一致，额外包含 all_completed 字段）
+// [
+//     'results' => [0 => ..., 1 => ..., 2 => ...],
+//     'errors' => [],
+//     'total_count' => 3,
+//     'success_count' => 3,
+//     'error_count' => 0,
+//     'all_completed' => true,
+// ]
 ```
 
 ### 竞速
@@ -169,7 +179,7 @@ $promise = Task::asyncDelay(function () {
     return computeResult();
 }, 2.0); // 2 秒后执行
 
-// 异步定时器
+// 异步定时器（返回 TimerInterface，可用于取消定时器）
 $timer = Task::asyncInterval(function () {
     Log::info('Heartbeat');
 }, 5.0); // 每 5 秒执行
@@ -264,9 +274,13 @@ $promise->then(
 | `schedule($callback, $delayMs, $timeoutMs)` | 定时调度 |
 | `async($callback)` | ReactPHP 异步 |
 | `asyncDelay($callback, $seconds)` | 异步延迟 |
-| `asyncInterval($callback, $seconds)` | 异步定时器 |
+| `asyncInterval($callback, $seconds)` | 异步定时器（返回 TimerInterface） |
 | `asyncExec($command)` | 异步命令 |
 | `asyncAll($callbacks)` | 异步全部 |
 | `asyncRace($callbacks)` | 异步竞速 |
 | `promise($callback)` | 创建 Promise |
 | `await($promise, $timeout)` | 等待 Promise |
+| `getEventLoop()` | 获取 ReactPHP 事件循环 |
+| `runEventLoopForever()` | 运行事件循环（CLI 模式） |
+| `stopEventLoop()` | 停止事件循环 |
+| `runEventLoop()` | 处理 sleeping fibers 事件循环 |

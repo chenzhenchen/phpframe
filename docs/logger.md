@@ -102,6 +102,8 @@ $monolog = Log::getLogger();
 | `warning` | `Log::warning()` | 警告 |
 | `error` | `Log::error()` | 错误 |
 
+> 注意：Logger 类仅实现了以上 5 个级别方法。虽然 Facade 的上下文注入机制支持 `alert`/`critical`/`emergency`，但 Logger 类本身未实现这些方法，调用会报错。如需使用更多级别，可通过 `$logger->getMonolog()->alert(...)` 直接调用 Monolog。
+
 ## Logger API
 
 | 方法 | 说明 |
@@ -117,3 +119,6 @@ $monolog = Log::getLogger();
 | `getRequestMonolog()` | 获取请求日志 Monolog 实例 |
 | `getLogFilePath()` | 获取当前日志文件路径 |
 | `getInstance($config)` | 获取 Logger 单例 |
+| `setRequestData($data)` | 设置请求数据 |
+| `setRequestStartTime($time)` | 设置请求开始时间 |
+| `getRequestData()` | 获取请求数据 |
