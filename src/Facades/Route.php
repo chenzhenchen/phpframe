@@ -3,6 +3,7 @@
 namespace PHPFrame\Facades;
 
 use FastRoute\RouteCollector;
+use PHPFrame\Middleware\MiddlewareInterface;
 
 /**
  * 路由注册门面类
@@ -17,6 +18,9 @@ use FastRoute\RouteCollector;
  * @method static void any(string $path, callable|array $handler) 注册ANY路由（支持所有HTTP方法）
  * @method static void shell(string $path, callable|array $handler) 注册SHELL路由（仅用于shell模式）
  * @method static void group(string $prefix, callable $callback) 注册路由组
+ * @method static void middleware(\PHPFrame\Middleware\MiddlewareInterface $middleware) 注册全局中间件
+ * @method static void registerMiddleware(string $name, \PHPFrame\Middleware\MiddlewareInterface $middleware) 注册路由级中间件别名
+ * @method static void handlerMiddleware(string $handler, array $middlewareNames) 为指定handler绑定路由级中间件
  */
 class Route
 {
@@ -162,5 +166,32 @@ class Route
         }
 
         self::$collector->addGroup($prefix, $callback);
+    }
+
+    /**
+     * 注册全局中间件
+     * 代理到 RouteManager::middleware()
+     */
+    public static function middleware(MiddlewareInterface $middleware): void
+    {
+        app('router')->middleware($middleware);
+    }
+
+    /**
+     * 注册路由级中间件别名
+     * 代理到 RouteManager::registerMiddleware()
+     */
+    public static function registerMiddleware(string $name, MiddlewareInterface $middleware): void
+    {
+        app('router')->registerMiddleware($name, $middleware);
+    }
+
+    /**
+     * 为指定handler绑定路由级中间件
+     * 代理到 RouteManager::handlerMiddleware()
+     */
+    public static function handlerMiddleware(string $handler, array $middlewareNames): void
+    {
+        app('router')->handlerMiddleware($handler, $middlewareNames);
     }
 }
