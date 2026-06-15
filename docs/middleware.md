@@ -72,6 +72,8 @@ $routeManager->middlewares([
 ]);
 ```
 
+> **延迟注册机制**：通过 `Route` 门面注册的中间件会先暂存到内部队列，在 `RouteManager` 创建后由框架自动调用 `Route::applyPendingMiddlewares()` 统一应用。这意味着你可以在路由文件中自由调用 `Route::middleware()` 等方法，无需关心 `RouteManager` 是否已初始化。
+
 ## 注册路由级中间件
 
 路由级中间件通过别名注册，然后绑定到指定的控制器方法（handler）：
@@ -95,6 +97,8 @@ $routeManager->handlerMiddleware('App\Controllers\UserController@profile', ['aut
 // 获取中间件
 $authMiddleware = $routeManager->getRouteMiddleware('auth');
 ```
+
+> 同样受延迟注册机制影响：通过 `Route` 门面调用的 `registerMiddleware()` 和 `handlerMiddleware()` 也会暂存，由框架在 `RouteManager` 创建后统一应用。
 
 路由级中间件在请求匹配到对应 handler 时自动应用，与全局中间件按顺序合并执行：
 

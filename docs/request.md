@@ -75,8 +75,14 @@ $request->post();
 // 获取 Server 参数
 $request->server('HTTP_HOST');
 
+// 获取全部 Server 参数（不传 key）
+$request->server();
+
 // 获取上传文件
 $request->files('avatar');
+
+// 获取全部上传文件（不传 key）
+$request->files();
 
 // 获取 Cookie
 $request->cookie('session_id');
@@ -117,8 +123,8 @@ $request->getJsonBody();  // ['key' => 'value']
 |------|----------|----------|------------|
 | `get()` | 合并 GET/POST/路由参数 | 从注入参数获取 | 从命令行参数获取 |
 | `all()` | 合并 `$_REQUEST` + 路由参数 | 注入参数 | 注入参数 |
-| `getMethod()` | `$_SERVER['REQUEST_METHOD']` | `__method__` 参数 | `SHELL` |
-| `getUri()` | `$_SERVER['REQUEST_URI']` | `__uri__` 参数 | `$argv[1]` |
+| `getMethod()` | `$_SERVER['REQUEST_METHOD']` | `__method__` 参数，默认 `GET` | `SHELL` |
+| `getUri()` | `$_SERVER['REQUEST_URI']` | `__uri__` 参数，默认 `/` | `$argv[1]` |
 | `getClientIp()` | `$_SERVER['REMOTE_ADDR']` | `cli` | `unknown` |
 | `getBearerToken()` | `HTTP_AUTHORIZATION` 头 | `__bearer_token__` 参数 | `null` |
 

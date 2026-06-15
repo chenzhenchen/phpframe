@@ -67,7 +67,7 @@ $logger->error('Error message');
 
 ## 请求日志
 
-请求日志由 `RouteManager` 自动调用 `Logger::writeLog()` 记录，格式为管道分隔：
+请求日志由 `RouteManager` 自动调用 `Logger::writeLog()` 记录，格式为管道分隔，每条日志独占一行：
 
 ```
 2026-06-13 10:30:00|info|192.168.1.1|127.0.0.1|15.23|200|GET|/api/users|{"page":1}|||

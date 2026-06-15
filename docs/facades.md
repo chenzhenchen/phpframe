@@ -11,7 +11,7 @@
 | `Cache` | `cache` | 缓存 |
 | `App` | `app` | 应用容器 |
 | `Config` | `config` | 配置 |
-| `Route` | - | 路由注册（直接操作 RouteCollector，中间件方法代理到 RouteManager） |
+| `Route` | - | 路由注册（直接操作 RouteCollector，中间件方法延迟注册到 RouteManager） |
 | `Hash` | `hash` | 哈希 |
 | `Redis` | `redis` | Redis 连接实例（含 db()/resetDb() 数据库切换方法） |
 | `Request` | `request` | 请求（含扩展方法：isAjax/isPost/isGet/isDelete/isPut/isPatch/getHeader/getUserAgent/getReferer/getContentType/getClientIpAdvanced/getRealClientIp/setParams） |
@@ -112,7 +112,22 @@ Log::clearContext();
 
 > 注意：`Log::getLogger()` 是 Log 门面特有的方法，不是 Facade 基类方法。
 
-## 工作原理
+## Route 门面的延迟注册机制
+
+`Route` 门面的中间件方法（`middleware()`、`registerMiddleware()`、`handlerMiddleware()`）采用延迟注册机制：调用时先将中间件暂存到内部队列，待 `RouteManager` 创建后由框架自动调用 `Route::applyPendingMiddlewares()` 统一应用。
+
+```
+路由文件中调用 Route::middleware()
+  → 暂存到 $pendingMiddlewares 队列
+  → Application 创建 RouteManager 后
+  → Route::applyPendingMiddlewares($routeManager)
+  → 遍历队列，逐个调用 $routeManager->middleware()
+  → 清空暂存队列
+```
+
+这样设计是因为路由文件在应用启动早期加载，此时 `RouteManager` 尚未创建。延迟注册确保了调用顺序的正确性，开发者无需关心 `RouteManager` 的初始化时机。
+
+> `Route::applyPendingMiddlewares()` 由框架内部自动调用，通常不需要手动调用。
 
 门面通过 `__callStatic` 魔术方法将静态调用转发到容器中的服务实例：
 

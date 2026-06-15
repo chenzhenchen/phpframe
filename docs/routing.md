@@ -101,7 +101,7 @@ Route::registerMiddleware('auth', new AuthMiddleware());
 Route::handlerMiddleware('App\Controllers\UserController@profile', ['auth']);
 ```
 
-> 注意：`Route::middleware()`、`Route::registerMiddleware()`、`Route::handlerMiddleware()` 是 Route Facade 的代理方法，内部通过 `app('router')` 转发到 RouteManager 实例。
+> 注意：`Route::middleware()`、`Route::registerMiddleware()`、`Route::handlerMiddleware()` 采用延迟注册机制，调用时先暂存到内部队列，待 `RouteManager` 创建后由框架自动调用 `Route::applyPendingMiddlewares()` 统一应用。开发者无需关心 `RouteManager` 的初始化时机，可在路由文件中自由调用。
 
 ## 路由分发流程
 
