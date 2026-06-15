@@ -29,7 +29,7 @@ class RequestLogger
      * @param array $context 额外上下文信息
      * @param array $args 命令行参数（仅shell模式）
      */
-    public function autoLog(string $mode, int $statusCode, string $uri, float $requestStartTime, \Exception $exception = null, array $context = [], array $args = []): void
+    public function autoLog(string $mode, int $statusCode, string $uri, float $requestStartTime, ?\Throwable $exception = null, array $context = [], array $args = []): void
     {
         try {
             if (!$this->container->has('logger')) {

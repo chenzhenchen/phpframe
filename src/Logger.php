@@ -83,7 +83,7 @@ class Logger
         // 请求日志 Monolog（管道分隔格式，兼容原有 writeLog 格式）
         $this->requestMonolog = new MonologLogger($this->channel . '.request');
         $requestHandler = new StreamHandler($logFile, MonologLogger::DEBUG);
-        $requestFormatter = new LineFormatter('%message%', 'Y-m-d H:i:s', false, true);
+        $requestFormatter = new LineFormatter('%message%' . "\n", 'Y-m-d H:i:s', false, true);
         $requestHandler->setFormatter($requestFormatter);
         $this->requestMonolog->pushHandler($requestHandler);
     }
@@ -114,10 +114,16 @@ class Logger
             return;
         }
 
-        foreach ([$this->monolog, $this->requestMonolog] as $logger) {
-            if ($logger === null) {
-                continue;
-            }
+        // initMonolog() 尚未完成时，$monolog / $requestMonolog 可能未初始化
+        $loggers = [];
+        if (isset($this->monolog)) {
+            $loggers[] = $this->monolog;
+        }
+        if (isset($this->requestMonolog)) {
+            $loggers[] = $this->requestMonolog;
+        }
+
+        foreach ($loggers as $logger) {
 
             $newHandlers = [];
             foreach ($logger->getHandlers() as $handler) {

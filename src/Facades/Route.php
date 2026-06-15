@@ -30,6 +30,21 @@ class Route
     protected static $collector;
 
     /**
+     * @var MiddlewareInterface[] 延迟注册的全局中间件
+     */
+    protected static array $pendingMiddlewares = [];
+
+    /**
+     * @var array<string, MiddlewareInterface> 延迟注册的路由级中间件别名
+     */
+    protected static array $pendingRouteMiddlewares = [];
+
+    /**
+     * @var array<string, string[]> 延迟注册的处理器中间件映射
+     */
+    protected static array $pendingHandlerMiddlewares = [];
+
+    /**
      * 设置当前的RouteCollector实例
      * 
      * @param RouteCollector $collector
@@ -170,28 +185,49 @@ class Route
 
     /**
      * 注册全局中间件
-     * 代理到 RouteManager::middleware()
+     * 路由注册阶段暂存，由 RouteManager 创建后统一应用
      */
     public static function middleware(MiddlewareInterface $middleware): void
     {
-        app('router')->middleware($middleware);
+        self::$pendingMiddlewares[] = $middleware;
     }
 
     /**
      * 注册路由级中间件别名
-     * 代理到 RouteManager::registerMiddleware()
+     * 路由注册阶段暂存，由 RouteManager 创建后统一应用
      */
     public static function registerMiddleware(string $name, MiddlewareInterface $middleware): void
     {
-        app('router')->registerMiddleware($name, $middleware);
+        self::$pendingRouteMiddlewares[$name] = $middleware;
     }
 
     /**
      * 为指定handler绑定路由级中间件
-     * 代理到 RouteManager::handlerMiddleware()
+     * 路由注册阶段暂存，由 RouteManager 创建后统一应用
      */
     public static function handlerMiddleware(string $handler, array $middlewareNames): void
     {
-        app('router')->handlerMiddleware($handler, $middlewareNames);
+        self::$pendingHandlerMiddlewares[$handler] = $middlewareNames;
+    }
+
+    /**
+     * 将暂存的中间件注册应用到 RouteManager，并清空暂存
+     * 由 Application 在创建 RouteManager 后调用
+     */
+    public static function applyPendingMiddlewares($routeManager): void
+    {
+        foreach (self::$pendingMiddlewares as $middleware) {
+            $routeManager->middleware($middleware);
+        }
+        foreach (self::$pendingRouteMiddlewares as $name => $middleware) {
+            $routeManager->registerMiddleware($name, $middleware);
+        }
+        foreach (self::$pendingHandlerMiddlewares as $handler => $middlewareNames) {
+            $routeManager->handlerMiddleware($handler, $middlewareNames);
+        }
+
+        self::$pendingMiddlewares = [];
+        self::$pendingRouteMiddlewares = [];
+        self::$pendingHandlerMiddlewares = [];
     }
 }

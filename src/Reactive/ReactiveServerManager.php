@@ -200,7 +200,18 @@ class ReactiveServerManager
             }
         );
 
-        $socket = new SocketServer("{$this->host}:{$this->port}");
+        // 多 Worker 模式使用 SO_REUSEPORT，允许各进程绑定同一端口，内核负载均衡
+        $context = [];
+        if ($this->workerNum > 1) {
+            $context = [
+                'tcp' => [
+                    'so_reuseport' => true,
+                    'so_reuseaddr' => true,
+                ],
+            ];
+        }
+
+        $socket = new SocketServer("{$this->host}:{$this->port}", $context);
         $this->httpServer->listen($socket);
 
         echo "Worker #{$workerId} (PID: " . getmypid() . ") 已启动: http://{$this->host}:{$this->port}\n";
@@ -226,7 +237,12 @@ class ReactiveServerManager
             $routeManager = $container->get('route_manager');
         }
 
-        return new ReactiveRequestHandler($dispatcher, $container, $routeManager);
+        $requestHandler = new ReactiveRequestHandler($dispatcher, $container, $routeManager);
+
+        // 将路由注册阶段暂存的中间件应用到 RouteManager
+        \PHPFrame\Facades\Route::applyPendingMiddlewares($requestHandler->getRouteManager());
+
+        return $requestHandler;
     }
 
     /**

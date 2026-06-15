@@ -248,7 +248,7 @@ class RouteManager
                         }
                         break;
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 $this->requestLogger->autoLog('cli', 500, $uri, $requestStartTime, $e, $logContext);
 
                 try {
@@ -257,7 +257,7 @@ class RouteManager
                     if ($exceptionHandlerClass && $container->has($exceptionHandlerClass)) {
                         $exceptionHandler = $container->get($exceptionHandlerClass);
                         $response = $exceptionHandler->handle($e, 'cli');
-                        if ($response instanceof Response) {
+                        if ($response instanceof ReactResponse) {
                             $resolve($response);
                         } else {
                             $resolve($this->responseFactory->createResponse($response));
@@ -265,7 +265,7 @@ class RouteManager
                     } else {
                         $resolve(new ReactResponse(500, ['Content-Type' => 'text/plain'], "Internal Server Error: " . $e->getMessage()));
                     }
-                } catch (\Exception $handlerException) {
+                } catch (\Throwable $handlerException) {
                     $resolve(new ReactResponse(500, ['Content-Type' => 'text/plain'], "Internal Server Error"));
                 }
             }

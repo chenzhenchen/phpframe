@@ -380,7 +380,7 @@ class Request
         }
 
         if ($mode === 'cli') {
-            return $this->get('__method__');
+            return $this->get('__method__', 'GET');
         }
 
         return 'SHELL';
@@ -403,7 +403,7 @@ class Request
         }
 
         if ($mode === 'cli') {
-            return $this->get('__uri__');
+            return $this->get('__uri__', '/');
         }
 
         if ($mode === 'shell' && php_sapi_name() === 'cli') {
@@ -420,9 +420,17 @@ class Request
     /**
      * 获取Server参数
      * 优先从注入数据读取，降级到超全局变量
+     * 不传 $key 时返回全部 server 参数
      */
-    public function server(string $key, $default = null)
+    public function server(string $key = '', $default = null)
     {
+        if ($key === '') {
+            if ($this->dataInjected) {
+                return $this->injectedServer;
+            }
+            return $_SERVER;
+        }
+
         if ($this->dataInjected) {
             return $this->injectedServer[$key] ?? $default;
         }
@@ -432,9 +440,17 @@ class Request
     /**
      * 获取上传文件
      * 优先从注入数据读取，降级到超全局变量
+     * 不传 $key 时返回全部文件
      */
-    public function files(string $key, $default = null)
+    public function files(string $key = '', $default = null)
     {
+        if ($key === '') {
+            if ($this->dataInjected) {
+                return $this->injectedFiles;
+            }
+            return $_FILES;
+        }
+
         if ($this->dataInjected) {
             return $this->injectedFiles[$key] ?? $default;
         }

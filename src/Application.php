@@ -154,6 +154,14 @@ class Application extends Container
                 }
             }
         });
+
+        // 提前解析 db 服务，确保 Eloquent 连接解析器已设置
+        // 否则 Eloquent Model 在 db 服务未解析时会因缺少 resolver 而报错
+        try {
+            $this->get('db');
+        } catch (\Throwable $e) {
+            // 数据库不可用时不阻塞应用启动（如仅使用缓存/文件等场景）
+        }
     }
 
     /**
@@ -298,6 +306,9 @@ class Application extends Container
 
         $dispatcher = $this->get('router');
         $routeManager = new RouteManager($dispatcher, $this);
+
+        // 将路由注册阶段暂存的中间件应用到 RouteManager
+        Facades\Route::applyPendingMiddlewares($routeManager);
 
         // 注册 RouteManager 到容器，使 CLI 模式可复用（保留中间件注册）
         $this->instances['route_manager'] = $routeManager;
@@ -458,6 +469,9 @@ class Application extends Container
 
         $dispatcher = $this->get('router');
         $routeManager = new RouteManager($dispatcher, $this);
+
+        // 将路由注册阶段暂存的中间件应用到 RouteManager
+        Facades\Route::applyPendingMiddlewares($routeManager);
 
         try {
             $routeManager->handleShellRequest($command, $args);
